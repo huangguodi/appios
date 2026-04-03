@@ -154,10 +154,41 @@ jobs:
             EXPORT_SIGNING_CERT="iPhone Developer"
           fi
           GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$MAIN_PROFILE_PLIST")
+          EXTENSION_GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$EXTENSION_PROFILE_PLIST")
           if [ "$GET_TASK_ALLOW" != "true" ]; then
             echo "Provisioning profile is not a development profile (get-task-allow != true). Refusing to fall back."
             exit 1
           fi
+          if [ "$EXTENSION_GET_TASK_ALLOW" != "true" ]; then
+            echo "Extension provisioning profile is not a development profile (get-task-allow != true). Refusing to fall back."
+            exit 1
+          fi
+          export MAIN_PROFILE_PLIST EXTENSION_PROFILE_PLIST
+          python - <<'PY'
+          import os
+          import datetime
+          import plistlib
+          import sys
+          main_path = os.environ["MAIN_PROFILE_PLIST"]
+          ext_path = os.environ["EXTENSION_PROFILE_PLIST"]
+          with open(main_path, "rb") as f:
+              main = plistlib.load(f)
+          with open(ext_path, "rb") as f:
+              ext = plistlib.load(f)
+          now = datetime.datetime.now(datetime.timezone.utc)
+          main_exp = main.get("ExpirationDate")
+          ext_exp = ext.get("ExpirationDate")
+          if main_exp is None or ext_exp is None:
+              print("Provisioning profile missing ExpirationDate")
+              sys.exit(1)
+          if main_exp.tzinfo is None:
+              main_exp = main_exp.replace(tzinfo=datetime.timezone.utc)
+          if ext_exp.tzinfo is None:
+              ext_exp = ext_exp.replace(tzinfo=datetime.timezone.utc)
+          if main_exp <= now or ext_exp <= now:
+              print("Provisioning profile is expired")
+              sys.exit(1)
+          PY
           echo "Resolved signing context: team=$TEAM_ID export_method=$EXPORT_METHOD main_profile=$MAIN_PROFILE_NAME($MAIN_PROFILE_UUID) extension_profile=$EXTENSION_PROFILE_NAME($EXTENSION_PROFILE_UUID)"
           EXPORT_PLIST="$RUNNER_TEMP/ExportOptions.plist"
           rm -f "$EXPORT_PLIST"
@@ -178,6 +209,18 @@ jobs:
             CODE_SIGNING_ALLOWED=YES \
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
+            "Runner:DEVELOPMENT_TEAM=$TEAM_ID" \
+            "PacketTunnel:DEVELOPMENT_TEAM=$TEAM_ID" \
+            "Runner:CODE_SIGN_STYLE=Manual" \
+            "PacketTunnel:CODE_SIGN_STYLE=Manual" \
+            "Runner:CODE_SIGN_IDENTITY=$SIGNING_IDENTITY" \
+            "PacketTunnel:CODE_SIGN_IDENTITY=$SIGNING_IDENTITY" \
+            "Runner:PRODUCT_BUNDLE_IDENTIFIER=$MAIN_BUNDLE_ID" \
+            "PacketTunnel:PRODUCT_BUNDLE_IDENTIFIER=$EXTENSION_BUNDLE_ID" \
+            "Runner:PROVISIONING_PROFILE=$MAIN_PROFILE_UUID" \
+            "PacketTunnel:PROVISIONING_PROFILE=$EXTENSION_PROFILE_UUID" \
+            "Runner:PROVISIONING_PROFILE_SPECIFIER=$MAIN_PROFILE_NAME" \
+            "PacketTunnel:PROVISIONING_PROFILE_SPECIFIER=$EXTENSION_PROFILE_NAME" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH"
           xcodebuild -exportArchive \
             -archivePath "$PWD/build/Runner.xcarchive" \
@@ -234,6 +277,28 @@ jobs:
           APPEX_GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$APPEX_PROFILE_PLIST")
           if [ "$APP_GET_TASK_ALLOW" != "true" ] || [ "$APPEX_GET_TASK_ALLOW" != "true" ]; then
             echo "IPA embedded profiles are not development profiles"
+            exit 1
+          fi
+          APP_PROFILE_TEAM=$(/usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" "$APP_PROFILE_PLIST")
+          APPEX_PROFILE_TEAM=$(/usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" "$APPEX_PROFILE_PLIST")
+          if [ "$APP_PROFILE_TEAM" != "$TEAM_ID" ] || [ "$APPEX_PROFILE_TEAM" != "$TEAM_ID" ]; then
+            echo "IPA embedded profile team mismatch: expected $TEAM_ID"
+            exit 1
+          fi
+          APP_ENTITLEMENTS_PLIST="$RUNNER_TEMP/app_entitlements.plist"
+          APPEX_ENTITLEMENTS_PLIST="$RUNNER_TEMP/appex_entitlements.plist"
+          /usr/bin/codesign -d --entitlements :- "$APP_DIR" > "$APP_ENTITLEMENTS_PLIST" 2>/dev/null
+          /usr/bin/codesign -d --entitlements :- "$APPEX_DIR" > "$APPEX_ENTITLEMENTS_PLIST" 2>/dev/null
+          if ! /usr/libexec/PlistBuddy -c "Print com.apple.security.application-groups:0" "$APP_ENTITLEMENTS_PLIST" | grep -q "$APP_GROUP_ID"; then
+            echo "App entitlements missing expected App Group: $APP_GROUP_ID"
+            exit 1
+          fi
+          if ! /usr/libexec/PlistBuddy -c "Print com.apple.security.application-groups:0" "$APPEX_ENTITLEMENTS_PLIST" | grep -q "$APP_GROUP_ID"; then
+            echo "Extension entitlements missing expected App Group: $APP_GROUP_ID"
+            exit 1
+          fi
+          if ! /usr/libexec/PlistBuddy -c "Print com.apple.developer.networking.networkextension" "$APPEX_ENTITLEMENTS_PLIST" | grep -q "packet-tunnel-provider"; then
+            echo "Extension entitlements missing packet-tunnel-provider"
             exit 1
           fi
           echo "IPA minimum iOS version: $APP_MIN_IOS"
