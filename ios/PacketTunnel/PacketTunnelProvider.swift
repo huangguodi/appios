@@ -630,20 +630,82 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     guard let path = defaultPath else {
       return nil
     }
-    let interfaces = path.availableInterfaces
-    if let wifi = interfaces.first(where: { $0.type == .wifi }) {
-      return wifi.index
+    let interfaces = activeInterfaceNames()
+    if path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet) {
+      if let index = resolveInterfaceIndex(
+        from: interfaces,
+        matchingPrefixes: ["en"]
+      ) {
+        return index
+      }
     }
-    if let wired = interfaces.first(where: { $0.type == .wiredEthernet }) {
-      return wired.index
+    if path.usesInterfaceType(.cellular) {
+      if let index = resolveInterfaceIndex(
+        from: interfaces,
+        matchingPrefixes: ["pdp_ip", "pdp-ip"]
+      ) {
+        return index
+      }
     }
-    if let cellular = interfaces.first(where: { $0.type == .cellular }) {
-      return cellular.index
+    if let index = resolveInterfaceIndex(
+      from: interfaces,
+      matchingPrefixes: ["en", "pdp_ip", "pdp-ip", "bridge"]
+    ) {
+      return index
     }
-    if let any = interfaces.first(where: { $0.type != .loopback }) {
-      return any.index
+    if let fallback = interfaces.first,
+       let index = interfaceIndex(named: fallback) {
+      return index
     }
     return nil
+  }
+
+  private func activeInterfaceNames() -> [String] {
+    var pointer: UnsafeMutablePointer<ifaddrs>?
+    guard getifaddrs(&pointer) == 0, let first = pointer else {
+      return []
+    }
+    defer { freeifaddrs(pointer) }
+
+    var result: [String] = []
+    var seen = Set<String>()
+    var current: UnsafeMutablePointer<ifaddrs>? = first
+
+    while let interface = current {
+      let flags = Int32(interface.pointee.ifa_flags)
+      let isUp = (flags & IFF_UP) != 0
+      let isRunning = (flags & IFF_RUNNING) != 0
+      if isUp, isRunning, let cName = interface.pointee.ifa_name {
+        let name = String(cString: cName)
+        let lowercased = name.lowercased()
+        if !lowercased.hasPrefix("lo"),
+           !lowercased.hasPrefix("utun"),
+           !seen.contains(name) {
+          seen.insert(name)
+          result.append(name)
+        }
+      }
+      current = interface.pointee.ifa_next
+    }
+
+    return result
+  }
+
+  private func resolveInterfaceIndex(from names: [String], matchingPrefixes prefixes: [String]) -> UInt32? {
+    for prefix in prefixes {
+      if let name = names.first(where: { $0.lowercased().hasPrefix(prefix.lowercased()) }),
+         let index = interfaceIndex(named: name) {
+        return index
+      }
+    }
+    return nil
+  }
+
+  private func interfaceIndex(named name: String) -> UInt32? {
+    name.withCString { cName in
+      let index = if_nametoindex(cName)
+      return index == 0 ? nil : index
+    }
   }
 
   private func bindSocketToInterface(
@@ -1184,7 +1246,7 @@ private final class CompletionGate {
   }
 }
 
-private final class PacketTunnelSocketProtector: NSObject, MobileSocketProtector {
+private final class PacketTunnelSocketProtector: NSObject, MobileSocketProtectorProtocol {
   private weak var provider: PacketTunnelProvider?
 
   init(provider: PacketTunnelProvider) {
