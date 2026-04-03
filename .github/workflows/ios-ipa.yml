@@ -112,6 +112,26 @@ jobs:
             echo "Extension provisioning profile missing Network Extensions entitlement"
             exit 1
           fi
+          MAIN_APP_GROUPS=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.security.application-groups" "$MAIN_PROFILE_PLIST" 2>/dev/null || true)
+          EXTENSION_APP_GROUPS=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.security.application-groups" "$EXTENSION_PROFILE_PLIST" 2>/dev/null || true)
+          MAIN_NETWORK_EXT=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.developer.networking.networkextension" "$MAIN_PROFILE_PLIST" 2>/dev/null || true)
+          EXTENSION_NETWORK_EXT=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.developer.networking.networkextension" "$EXTENSION_PROFILE_PLIST" 2>/dev/null || true)
+          if [[ "$MAIN_APP_GROUPS" != *"group.com.xiangyu.clash"* ]] || [[ "$EXTENSION_APP_GROUPS" != *"group.com.xiangyu.clash"* ]]; then
+            echo "Provisioning profile App Groups mismatch. Expected group.com.xiangyu.clash"
+            echo "Main profile groups:"
+            echo "$MAIN_APP_GROUPS"
+            echo "Extension profile groups:"
+            echo "$EXTENSION_APP_GROUPS"
+            exit 1
+          fi
+          if [[ "$MAIN_NETWORK_EXT" != *"packet-tunnel-provider"* ]] || [[ "$EXTENSION_NETWORK_EXT" != *"packet-tunnel-provider"* ]]; then
+            echo "Provisioning profile Network Extension mismatch. Expected packet-tunnel-provider"
+            echo "Main profile networkextension:"
+            echo "$MAIN_NETWORK_EXT"
+            echo "Extension profile networkextension:"
+            echo "$EXTENSION_NETWORK_EXT"
+            exit 1
+          fi
           GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$MAIN_PROFILE_PLIST")
           HAS_PROVISIONED_DEVICES="false"
           if /usr/libexec/PlistBuddy -c "Print ProvisionedDevices:0" "$MAIN_PROFILE_PLIST" >/dev/null 2>&1; then
