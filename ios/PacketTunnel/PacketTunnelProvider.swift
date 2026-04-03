@@ -29,42 +29,37 @@ final class SelectProxyPayload: Codable {
 }
 
 final class PacketTunnelProvider: NEPacketTunnelProvider {
-  private let actionQueue = DispatchQueue(label: "com.accelerator.tg.packet-tunnel.action")
   private enum AppConfigKey {
     static let appGroupId = "IOSAppGroupIdentifier"
   }
-  private enum HardcodedTunConfig {
-    static let mtu = 1500
-    static let ipv4Address = "198.18.0.1"
-    static let ipv4Mask = "255.255.255.252"
-    static let ipv4CIDR = "198.18.0.1/30"
-    static let ipv4DnsServer = "198.18.0.2"
-    static let ipv6Address = "fdfe:dcba:9876::1"
-    static let ipv6Prefix = 126
-    static let ipv6CIDR = "fdfe:dcba:9876::1/126"
-    static let dnsHijackTargets = ["0.0.0.0:53"]
-  }
+  private let actionQueue = DispatchQueue(label: "com.accelerator.tg.packet-tunnel.action")
   private var started = false
   private var currentSessionId = ""
   private var trafficTimer: DispatchSourceTimer?
   private var lastPersistedTrafficSnapshot = TrafficSnapshot.empty
   private var lastPersistedTrafficAt: TimeInterval = 0
   private var socketProtector: PacketTunnelSocketProtector?
-
   private var defaultAppGroupId: String {
     if let configuredAppGroupId = configValue(for: AppConfigKey.appGroupId) {
       return configuredAppGroupId
     }
-    let bundleId = configValue(for: kCFBundleIdentifierKey as String)
-      ?? Bundle.main.bundleIdentifier
-      ?? "app.bundle.packettunnel"
-    let appBundleId: String
-    if bundleId.hasSuffix(".packettunnel") {
-      appBundleId = String(bundleId.dropLast(".packettunnel".count))
-    } else {
-      appBundleId = bundleId
+    let bundleId = Bundle.main.bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let effectiveBundleId = (bundleId?.isEmpty == false) ? bundleId! : "app.bundle.packettunnel"
+    if effectiveBundleId.hasSuffix(".packettunnel") {
+      return "group.\(String(effectiveBundleId.dropLast(".packettunnel".count)))"
     }
-    return "group.\(appBundleId)"
+    return "group.\(effectiveBundleId)"
+  }
+  private struct RuntimeTunConfig {
+    var autoRoute: Bool = false
+    var mtu: Int?
+    var inet4Address: [String] = []
+    var inet6Address: [String] = []
+    var inet4RouteAddress: [String] = []
+    var inet6RouteAddress: [String] = []
+    var inet4RouteExcludeAddress: [String] = []
+    var inet6RouteExcludeAddress: [String] = []
+    var dnsServers: [String] = []
   }
 
   private func configValue(for key: String) -> String? {
@@ -128,7 +123,11 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         state.lastError = nil
       }
 
-      let settings = buildNetworkSettings()
+      let runtimeTunConfig = loadRuntimeTunConfig(
+        homeDir: homeDir,
+        configFileName: configFileName
+      )
+      let settings = buildNetworkSettings(runtimeTunConfig: runtimeTunConfig)
       setTunnelNetworkSettings(settings) { [weak self] error in
         guard let self else {
           finish(error)
@@ -225,29 +224,375 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     }
   }
 
-  private func buildNetworkSettings() -> NEPacketTunnelNetworkSettings {
+  private func buildNetworkSettings(runtimeTunConfig: RuntimeTunConfig) -> NEPacketTunnelNetworkSettings {
     let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
-    settings.mtu = NSNumber(value: HardcodedTunConfig.mtu)
+    if runtimeTunConfig.autoRoute {
+      settings.mtu = NSNumber(value: runtimeTunConfig.mtu ?? 1500)
 
-    let dns = NEDNSSettings(servers: [HardcodedTunConfig.ipv4DnsServer])
-    dns.matchDomains = [""]
-    dns.matchDomainsNoSearch = true
-    settings.dnsSettings = dns
+      let ipv4AddressPairs = runtimeTunConfig.inet4Address.compactMap(parseIPv4CIDR)
+      let ipv4Addresses = ipv4AddressPairs.isEmpty
+        ? ["172.19.0.1"]
+        : ipv4AddressPairs.map { $0.address }
+      let ipv4Masks = ipv4AddressPairs.isEmpty
+        ? ["255.255.255.252"]
+        : ipv4AddressPairs.map { $0.mask }
+      let ipv4 = NEIPv4Settings(addresses: ipv4Addresses, subnetMasks: ipv4Masks)
+      let ipv4IncludedRoutes = runtimeTunConfig.inet4RouteAddress.compactMap(parseIPv4Route)
+      ipv4.includedRoutes = ipv4IncludedRoutes.isEmpty ? [NEIPv4Route.default()] : ipv4IncludedRoutes
+      let ipv4ExcludedRoutes = runtimeTunConfig.inet4RouteExcludeAddress.compactMap(parseIPv4Route)
+      if !ipv4ExcludedRoutes.isEmpty {
+        ipv4.excludedRoutes = ipv4ExcludedRoutes
+      }
+      settings.ipv4Settings = ipv4
 
-    let ipv4 = NEIPv4Settings(
-      addresses: [HardcodedTunConfig.ipv4Address],
-      subnetMasks: [HardcodedTunConfig.ipv4Mask]
-    )
-    ipv4.includedRoutes = [NEIPv4Route.default()]
-    settings.ipv4Settings = ipv4
-
-    let ipv6 = NEIPv6Settings(
-      addresses: [HardcodedTunConfig.ipv6Address],
-      networkPrefixLengths: [NSNumber(value: HardcodedTunConfig.ipv6Prefix)]
-    )
-    ipv6.includedRoutes = [NEIPv6Route.default()]
-    settings.ipv6Settings = ipv6
+      let ipv6AddressPairs = runtimeTunConfig.inet6Address.compactMap(parseIPv6CIDR)
+      let ipv6Addresses = ipv6AddressPairs.isEmpty
+        ? ["fdfe:dcbe:9876::1"]
+        : ipv6AddressPairs.map { $0.address }
+      let ipv6Prefix = ipv6AddressPairs.isEmpty
+        ? [NSNumber(value: 126)]
+        : ipv6AddressPairs.map { $0.prefix }
+      let ipv6 = NEIPv6Settings(addresses: ipv6Addresses, networkPrefixLengths: ipv6Prefix)
+      let ipv6IncludedRoutes = runtimeTunConfig.inet6RouteAddress.compactMap(parseIPv6Route)
+      ipv6.includedRoutes = ipv6IncludedRoutes.isEmpty ? [NEIPv6Route.default()] : ipv6IncludedRoutes
+      let ipv6ExcludedRoutes = runtimeTunConfig.inet6RouteExcludeAddress.compactMap(parseIPv6Route)
+      if !ipv6ExcludedRoutes.isEmpty {
+        ipv6.excludedRoutes = ipv6ExcludedRoutes
+      }
+      settings.ipv6Settings = ipv6
+    }
     return settings
+  }
+
+  private func loadRuntimeTunConfig(homeDir: String, configFileName: String) -> RuntimeTunConfig {
+    let path = (homeDir as NSString).appendingPathComponent(configFileName)
+    guard
+      let content = try? String(contentsOfFile: path, encoding: .utf8)
+    else {
+      return RuntimeTunConfig()
+    }
+    let preparedContent = ensureTunSection(content: content)
+    if preparedContent != content {
+      try? preparedContent.write(
+        to: URL(fileURLWithPath: path),
+        atomically: true,
+        encoding: .utf8
+      )
+    }
+
+    let normalized = preparedContent.replacingOccurrences(of: "\r\n", with: "\n")
+    let lines = normalized.components(separatedBy: "\n")
+    let tunSection = topLevelSection(named: "tun", from: lines)
+    let dnsSection = topLevelSection(named: "dns", from: lines)
+
+    var config = RuntimeTunConfig()
+    config.autoRoute = parseBoolValue(key: "auto-route", in: tunSection) ?? false
+    config.mtu = parseIntValue(key: "mtu", in: tunSection)
+    config.inet4Address = parseListValue(key: "inet4-address", in: tunSection)
+    config.inet6Address = parseListValue(key: "inet6-address", in: tunSection)
+    config.inet4RouteAddress = parseListValue(key: "inet4-route-address", in: tunSection)
+    config.inet6RouteAddress = parseListValue(key: "inet6-route-address", in: tunSection)
+    config.inet4RouteExcludeAddress = parseListValue(
+      key: "inet4-route-exclude-address",
+      in: tunSection
+    )
+    config.inet6RouteExcludeAddress = parseListValue(
+      key: "inet6-route-exclude-address",
+      in: tunSection
+    )
+
+    let routeAddress = parseListValue(key: "route-address", in: tunSection)
+    if config.inet4RouteAddress.isEmpty {
+      config.inet4RouteAddress = routeAddress.filter { !$0.contains(":") }
+    }
+    if config.inet6RouteAddress.isEmpty {
+      config.inet6RouteAddress = routeAddress.filter { $0.contains(":") }
+    }
+
+    let routeExcludeAddress = parseListValue(key: "route-exclude-address", in: tunSection)
+    if config.inet4RouteExcludeAddress.isEmpty {
+      config.inet4RouteExcludeAddress = routeExcludeAddress.filter { !$0.contains(":") }
+    }
+    if config.inet6RouteExcludeAddress.isEmpty {
+      config.inet6RouteExcludeAddress = routeExcludeAddress.filter { $0.contains(":") }
+    }
+
+    let dnsRawServers =
+      parseListValue(key: "nameserver", in: dnsSection) +
+      parseListValue(key: "default-nameserver", in: dnsSection) +
+      parseListValue(key: "proxy-server-nameserver", in: dnsSection) +
+      parseListValue(key: "fallback", in: dnsSection)
+    config.dnsServers = normalizeDnsServers(dnsRawServers)
+    return config
+  }
+
+  private func ensureTunSection(content: String) -> String {
+    let useCrlf = content.contains("\r\n")
+    let normalized = content.replacingOccurrences(of: "\r\n", with: "\n")
+    let lines = normalized.components(separatedBy: "\n")
+    let hasTun = lines.contains { line in
+      let trimmed = line.trimmingCharacters(in: .whitespaces)
+      return trimmed == "tun:" && !line.hasPrefix(" ") && !line.hasPrefix("\t")
+    }
+    guard !hasTun else {
+      return content
+    }
+    let suffix = normalized.isEmpty || normalized.hasSuffix("\n") ? "" : "\n"
+    let appended = """
+    \(normalized)\(suffix)tun:
+      enable: true
+      stack: system
+      auto-route: false
+      auto-detect-interface: true
+      dns-hijack: []
+
+    """
+    return useCrlf ? appended.replacingOccurrences(of: "\n", with: "\r\n") : appended
+  }
+
+  private func topLevelSection(named name: String, from lines: [String]) -> [String] {
+    guard
+      let startIndex = lines.firstIndex(where: { line in
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed == "\(name):" && !line.hasPrefix(" ") && !line.hasPrefix("\t")
+      })
+    else {
+      return []
+    }
+    var section: [String] = []
+    var index = startIndex + 1
+    while index < lines.count {
+      let line = lines[index]
+      if isTopLevelYamlKeyLine(line) {
+        break
+      }
+      section.append(line)
+      index += 1
+    }
+    return section
+  }
+
+  private func isTopLevelYamlKeyLine(_ line: String) -> Bool {
+    if line.isEmpty || line.hasPrefix(" ") || line.hasPrefix("\t") {
+      return false
+    }
+    let trimmed = line.trimmingCharacters(in: .whitespaces)
+    if trimmed.hasPrefix("-") || trimmed.hasPrefix("#") {
+      return false
+    }
+    return trimmed.range(of: #"^[A-Za-z0-9_-]+:\s*"#, options: .regularExpression) != nil
+  }
+
+  private func parseIntValue(key: String, in section: [String]) -> Int? {
+    for line in section {
+      let trimmed = line.trimmingCharacters(in: .whitespaces)
+      guard trimmed.hasPrefix("\(key):") else { continue }
+      let raw = trimmed.dropFirst(key.count + 1)
+      let value = sanitizeYamlScalar(String(raw))
+      return Int(value)
+    }
+    return nil
+  }
+
+  private func parseBoolValue(key: String, in section: [String]) -> Bool? {
+    for line in section {
+      let trimmed = line.trimmingCharacters(in: .whitespaces)
+      guard trimmed.hasPrefix("\(key):") else { continue }
+      let raw = trimmed.dropFirst(key.count + 1)
+      let value = sanitizeYamlScalar(String(raw)).lowercased()
+      if value == "true" {
+        return true
+      }
+      if value == "false" {
+        return false
+      }
+      return nil
+    }
+    return nil
+  }
+
+  private func parseListValue(key: String, in section: [String]) -> [String] {
+    for i in 0..<section.count {
+      let line = section[i]
+      let trimmed = line.trimmingCharacters(in: .whitespaces)
+      guard trimmed.hasPrefix("\(key):") else { continue }
+      let keyIndent = leadingWhitespaceCount(line)
+      let raw = sanitizeYamlScalar(String(trimmed.dropFirst(key.count + 1)))
+      if raw.hasPrefix("[") && raw.hasSuffix("]") {
+        let inner = raw.dropFirst().dropLast()
+        return inner
+          .split(separator: ",")
+          .map { sanitizeYamlScalar(String($0)) }
+          .filter { !$0.isEmpty }
+      }
+      if !raw.isEmpty {
+        return [raw]
+      }
+      var values: [String] = []
+      var j = i + 1
+      while j < section.count {
+        let nextLine = section[j]
+        let nextTrimmed = nextLine.trimmingCharacters(in: .whitespaces)
+        if nextTrimmed.isEmpty || nextTrimmed.hasPrefix("#") {
+          j += 1
+          continue
+        }
+        let nextIndent = leadingWhitespaceCount(nextLine)
+        if nextIndent <= keyIndent {
+          break
+        }
+        guard nextTrimmed.hasPrefix("-") else {
+          j += 1
+          continue
+        }
+        let item = sanitizeYamlScalar(
+          String(nextTrimmed.dropFirst().trimmingCharacters(in: .whitespaces))
+        )
+        if !item.isEmpty {
+          values.append(item)
+        }
+        j += 1
+      }
+      return values
+    }
+    return []
+  }
+
+  private func sanitizeYamlScalar(_ value: String) -> String {
+    var result = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let hashIndex = result.firstIndex(of: "#") {
+      result = String(result[..<hashIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    if result.hasPrefix("'"), result.hasSuffix("'"), result.count >= 2 {
+      result = String(result.dropFirst().dropLast())
+    }
+    if result.hasPrefix("\""), result.hasSuffix("\""), result.count >= 2 {
+      result = String(result.dropFirst().dropLast())
+    }
+    return result
+  }
+
+  private func leadingWhitespaceCount(_ line: String) -> Int {
+    line.prefix { $0 == " " || $0 == "\t" }.count
+  }
+
+  private func parseIPv4CIDR(_ cidr: String) -> (address: String, mask: String)? {
+    let normalized = sanitizeYamlScalar(cidr)
+    if normalized.isEmpty {
+      return nil
+    }
+    let parts = normalized.split(separator: "/", maxSplits: 1).map(String.init)
+    let address = parts[0]
+    guard isValidIPv4Address(address) else {
+      return nil
+    }
+    let prefix = parts.count > 1 ? Int(parts[1]) ?? 32 : 32
+    guard (0...32).contains(prefix) else {
+      return nil
+    }
+    let maskValue: UInt32 = prefix == 0 ? 0 : UInt32.max << UInt32(32 - prefix)
+    let mask = "\(UInt8((maskValue >> 24) & 0xff)).\(UInt8((maskValue >> 16) & 0xff)).\(UInt8((maskValue >> 8) & 0xff)).\(UInt8(maskValue & 0xff))"
+    return (address, mask)
+  }
+
+  private func parseIPv6CIDR(_ cidr: String) -> (address: String, prefix: NSNumber)? {
+    let normalized = sanitizeYamlScalar(cidr)
+    if normalized.isEmpty {
+      return nil
+    }
+    let parts = normalized.split(separator: "/", maxSplits: 1).map(String.init)
+    let address = parts[0]
+    guard isValidIPv6Address(address) else {
+      return nil
+    }
+    let prefix = parts.count > 1 ? Int(parts[1]) ?? 128 : 128
+    guard (0...128).contains(prefix) else {
+      return nil
+    }
+    return (address, NSNumber(value: prefix))
+  }
+
+  private func parseIPv4Route(_ cidr: String) -> NEIPv4Route? {
+    guard let parsed = parseIPv4CIDR(cidr) else {
+      return nil
+    }
+    if parsed.address == "0.0.0.0", parsed.mask == "0.0.0.0" {
+      return NEIPv4Route.default()
+    }
+    return NEIPv4Route(destinationAddress: parsed.address, subnetMask: parsed.mask)
+  }
+
+  private func parseIPv6Route(_ cidr: String) -> NEIPv6Route? {
+    guard let parsed = parseIPv6CIDR(cidr) else {
+      return nil
+    }
+    if parsed.address == "::", parsed.prefix.intValue == 0 {
+      return NEIPv6Route.default()
+    }
+    return NEIPv6Route(destinationAddress: parsed.address, networkPrefixLength: parsed.prefix)
+  }
+
+  private func normalizeDnsServers(_ servers: [String]) -> [String] {
+    var result: [String] = []
+    var seen = Set<String>()
+    for rawServer in servers {
+      guard let extracted = extractDnsHost(rawServer) else {
+        continue
+      }
+      let normalized = extracted.lowercased()
+      if seen.contains(normalized) {
+        continue
+      }
+      seen.insert(normalized)
+      result.append(extracted)
+    }
+    return result
+  }
+
+  private func extractDnsHost(_ raw: String) -> String? {
+    var candidate = sanitizeYamlScalar(raw)
+    if candidate.isEmpty || candidate.lowercased() == "system" {
+      return nil
+    }
+    if let hashIndex = candidate.firstIndex(of: "#") {
+      candidate = String(candidate[..<hashIndex])
+    }
+    candidate = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+    if candidate.isEmpty {
+      return nil
+    }
+    if candidate.contains("://"), let url = URL(string: candidate), let host = url.host {
+      candidate = host
+    }
+    if candidate.hasPrefix("["),
+       let closing = candidate.firstIndex(of: "]") {
+      candidate = String(candidate[candidate.index(after: candidate.startIndex)..<closing])
+    } else if candidate.filter({ $0 == ":" }).count == 1 {
+      let parts = candidate.split(separator: ":", maxSplits: 1).map(String.init)
+      if parts.count == 2, Int(parts[1]) != nil {
+        candidate = parts[0]
+      }
+    }
+    candidate = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+    if candidate.isEmpty {
+      return nil
+    }
+    if isValidIPv4Address(candidate) || isValidIPv6Address(candidate) {
+      return candidate
+    }
+    let hostPattern = #"^[A-Za-z0-9.-]+$"#
+    let validHost = candidate.range(of: hostPattern, options: .regularExpression) != nil
+    return validHost ? candidate : nil
+  }
+
+  private func isValidIPv4Address(_ value: String) -> Bool {
+    var addr = in_addr()
+    return value.withCString { inet_pton(AF_INET, $0, &addr) } == 1
+  }
+
+  private func isValidIPv6Address(_ value: String) -> Bool {
+    var addr = in6_addr()
+    return value.withCString { inet_pton(AF_INET6, $0, &addr) } == 1
   }
 
   fileprivate func protectSocket(fd: Int64, network: String?, address: String?) -> Bool {
@@ -447,7 +792,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   private func injectTunConfig(content: String, fileDescriptor: Int) -> String {
     let useCrlf = content.contains("\r\n")
     let normalized = content.replacingOccurrences(of: "\r\n", with: "\n")
-    let lines = normalized.components(separatedBy: "\n")
+    var lines = normalized.components(separatedBy: "\n")
 
     func isTopLevelKeyLine(_ line: String) -> Bool {
       if line.isEmpty { return false }
@@ -455,6 +800,11 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       let trimmed = line.trimmingCharacters(in: .whitespaces)
       if trimmed.hasPrefix("-") || trimmed.hasPrefix("#") { return false }
       return trimmed.range(of: #"^[A-Za-z0-9_-]+:\s*"#, options: .regularExpression) != nil
+    }
+
+    func leadingWhitespace(_ line: String) -> String {
+      let prefix = line.prefix { $0 == " " || $0 == "\t" }
+      return String(prefix)
     }
 
     var tunIndex: Int?
@@ -469,22 +819,25 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       }
     }
 
-    let tunBlock = [
-      "tun:",
-      "  enable: true",
-      "  stack: system",
-      "  auto-route: false",
-      "  auto-detect-interface: true",
-      "  mtu: \(HardcodedTunConfig.mtu)",
-      "  dns-hijack: [\(HardcodedTunConfig.dnsHijackTargets.map { "\"\($0)\"" }.joined(separator: ", "))]",
-      "  inet4-address: [\"\(HardcodedTunConfig.ipv4CIDR)\"]",
-      "  inet6-address: [\"\(HardcodedTunConfig.ipv6CIDR)\"]",
-      "  file-descriptor: \(fileDescriptor)",
-    ].joined(separator: "\n")
+    let requiredKeyLines: [(key: String, line: (String) -> String)] = [
+      ("enable", { indent in "\(indent)enable: true" }),
+      ("stack", { indent in "\(indent)stack: system" }),
+      ("auto-detect-interface", { indent in "\(indent)auto-detect-interface: true" }),
+      ("file-descriptor", { indent in "\(indent)file-descriptor: \(fileDescriptor)" }),
+    ]
 
     guard let tunIndex else {
+      let defaultBlock = [
+        "tun:",
+        "  enable: true",
+        "  stack: system",
+        "  auto-route: false",
+        "  auto-detect-interface: true",
+        "  dns-hijack: []",
+        "  file-descriptor: \(fileDescriptor)",
+      ].joined(separator: "\n")
       let glued = normalized.hasSuffix("\n") || normalized.isEmpty ? normalized : "\(normalized)\n"
-      let result = "\(glued)\n\(tunBlock)\n"
+      let result = "\(glued)\n\(defaultBlock)\n"
       return useCrlf ? result.replacingOccurrences(of: "\n", with: "\r\n") : result
     }
 
@@ -497,9 +850,53 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         }
       }
     }
-    let prefix = Array(lines[..<tunIndex])
-    let suffix = Array(lines[blockEnd...])
-    let result = (prefix + tunBlock.components(separatedBy: "\n") + suffix).joined(separator: "\n")
+
+    var indent = "  "
+    if tunIndex + 1 < blockEnd {
+      for i in (tunIndex + 1)..<blockEnd {
+        let line = lines[i]
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty || trimmed.hasPrefix("#") { continue }
+        let prefix = leadingWhitespace(line)
+        if !prefix.isEmpty {
+          indent = prefix
+          break
+        }
+      }
+    }
+
+    var presentKeys = Set<String>()
+    if tunIndex + 1 < blockEnd {
+      for i in (tunIndex + 1)..<blockEnd {
+        let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+        for (key, lineBuilder) in requiredKeyLines {
+          if trimmed.hasPrefix("\(key):") {
+            lines[i] = lineBuilder(indent)
+            presentKeys.insert(key)
+            break
+          }
+        }
+      }
+    }
+
+    var insertAt = tunIndex + 1
+    while insertAt < blockEnd {
+      let trimmed = lines[insertAt].trimmingCharacters(in: .whitespaces)
+      if trimmed.isEmpty || trimmed.hasPrefix("#") {
+        insertAt += 1
+        continue
+      }
+      break
+    }
+
+    let toInsert = requiredKeyLines
+      .filter { !presentKeys.contains($0.key) }
+      .map { $0.line(indent) }
+    if !toInsert.isEmpty {
+      lines.insert(contentsOf: toInsert, at: insertAt)
+    }
+
+    let result = lines.joined(separator: "\n")
     return useCrlf ? result.replacingOccurrences(of: "\n", with: "\r\n") : result
   }
 
