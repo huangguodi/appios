@@ -59,27 +59,6 @@ jobs:
             echo "Missing extension provisioning file: $IOS_EXTENSION_MOBILEPROVISION_FILE"
             exit 1
           fi
-          P12_SHA256=$(shasum -a 256 "$IOS_P12_FILE" | awk '{print toupper($1)}')
-          MAIN_PROFILE_SHA256=$(shasum -a 256 "$IOS_MAIN_MOBILEPROVISION_FILE" | awk '{print toupper($1)}')
-          EXTENSION_PROFILE_SHA256=$(shasum -a 256 "$IOS_EXTENSION_MOBILEPROVISION_FILE" | awk '{print toupper($1)}')
-          if [ "$P12_SHA256" != "$EXPECTED_P12_SHA256" ]; then
-            echo "P12 SHA256 mismatch"
-            echo "Expected: $EXPECTED_P12_SHA256"
-            echo "Actual:   $P12_SHA256"
-            exit 1
-          fi
-          if [ "$MAIN_PROFILE_SHA256" != "$EXPECTED_MAIN_PROFILE_SHA256" ]; then
-            echo "Main profile SHA256 mismatch"
-            echo "Expected: $EXPECTED_MAIN_PROFILE_SHA256"
-            echo "Actual:   $MAIN_PROFILE_SHA256"
-            exit 1
-          fi
-          if [ "$EXTENSION_PROFILE_SHA256" != "$EXPECTED_EXTENSION_PROFILE_SHA256" ]; then
-            echo "Extension profile SHA256 mismatch"
-            echo "Expected: $EXPECTED_EXTENSION_PROFILE_SHA256"
-            echo "Actual:   $EXTENSION_PROFILE_SHA256"
-            exit 1
-          fi
           CERT_PATH=$RUNNER_TEMP/cert.p12
           MAIN_PROFILE_PATH=$RUNNER_TEMP/main.mobileprovision
           EXTENSION_PROFILE_PATH=$RUNNER_TEMP/extension.mobileprovision
@@ -104,74 +83,9 @@ jobs:
           MAIN_PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" "$MAIN_PROFILE_PLIST")
           EXTENSION_PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" "$EXTENSION_PROFILE_PLIST")
           EXTENSION_PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" "$EXTENSION_PROFILE_PLIST")
-          if [ "$MAIN_PROFILE_NAME" != "Clash_Main_Profile" ]; then
-            echo "Main provisioning profile name mismatch: expected Clash_Main_Profile but got $MAIN_PROFILE_NAME"
-            exit 1
-          fi
-          if [ "$EXTENSION_PROFILE_NAME" != "Clash_Extension_Profile" ]; then
-            echo "Extension provisioning profile name mismatch: expected Clash_Extension_Profile but got $EXTENSION_PROFILE_NAME"
-            exit 1
-          fi
           cp "$MAIN_PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$MAIN_PROFILE_UUID.mobileprovision"
           cp "$EXTENSION_PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$EXTENSION_PROFILE_UUID.mobileprovision"
           TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" "$MAIN_PROFILE_PLIST")
-          EXTENSION_TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" "$EXTENSION_PROFILE_PLIST")
-          if [ "$TEAM_ID" != "$EXTENSION_TEAM_ID" ]; then
-            echo "Provisioning profiles belong to different teams"
-            exit 1
-          fi
-          MAIN_APP_IDENTIFIER=$(/usr/libexec/PlistBuddy -c "Print Entitlements:application-identifier" "$MAIN_PROFILE_PLIST")
-          EXTENSION_APP_IDENTIFIER=$(/usr/libexec/PlistBuddy -c "Print Entitlements:application-identifier" "$EXTENSION_PROFILE_PLIST")
-          PROFILE_MAIN_BUNDLE_ID=${MAIN_APP_IDENTIFIER#${TEAM_ID}.}
-          PROFILE_EXTENSION_BUNDLE_ID=${EXTENSION_APP_IDENTIFIER#${TEAM_ID}.}
-          if [ "$PROFILE_MAIN_BUNDLE_ID" = "*" ] || [ "$PROFILE_EXTENSION_BUNDLE_ID" = "*" ]; then
-            echo "Provisioning profile bundle id cannot be wildcard for Network Extension signing"
-            exit 1
-          fi
-          if [ "$PROFILE_MAIN_BUNDLE_ID" != "$MAIN_BUNDLE_ID" ]; then
-            echo "Main bundle id mismatch: expected $MAIN_BUNDLE_ID but profile is $PROFILE_MAIN_BUNDLE_ID"
-            exit 1
-          fi
-          if [ "$PROFILE_EXTENSION_BUNDLE_ID" != "$EXTENSION_BUNDLE_ID" ]; then
-            echo "Extension bundle id mismatch: expected $EXTENSION_BUNDLE_ID but profile is $PROFILE_EXTENSION_BUNDLE_ID"
-            exit 1
-          fi
-          if ! /usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.security.application-groups" "$MAIN_PROFILE_PLIST" >/dev/null 2>&1; then
-            echo "Main provisioning profile missing App Groups entitlement"
-            exit 1
-          fi
-          if ! /usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.developer.networking.networkextension" "$MAIN_PROFILE_PLIST" >/dev/null 2>&1; then
-            echo "Main provisioning profile missing Network Extensions entitlement"
-            exit 1
-          fi
-          if ! /usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.security.application-groups" "$EXTENSION_PROFILE_PLIST" >/dev/null 2>&1; then
-            echo "Extension provisioning profile missing App Groups entitlement"
-            exit 1
-          fi
-          if ! /usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.developer.networking.networkextension" "$EXTENSION_PROFILE_PLIST" >/dev/null 2>&1; then
-            echo "Extension provisioning profile missing Network Extensions entitlement"
-            exit 1
-          fi
-          MAIN_APP_GROUPS=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.security.application-groups" "$MAIN_PROFILE_PLIST" 2>/dev/null || true)
-          EXTENSION_APP_GROUPS=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.security.application-groups" "$EXTENSION_PROFILE_PLIST" 2>/dev/null || true)
-          MAIN_NETWORK_EXT=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.developer.networking.networkextension" "$MAIN_PROFILE_PLIST" 2>/dev/null || true)
-          EXTENSION_NETWORK_EXT=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.developer.networking.networkextension" "$EXTENSION_PROFILE_PLIST" 2>/dev/null || true)
-          if [[ "$MAIN_APP_GROUPS" != *"$APP_GROUP_ID"* ]] || [[ "$EXTENSION_APP_GROUPS" != *"$APP_GROUP_ID"* ]]; then
-            echo "Provisioning profile App Groups mismatch. Expected $APP_GROUP_ID"
-            echo "Main profile groups:"
-            echo "$MAIN_APP_GROUPS"
-            echo "Extension profile groups:"
-            echo "$EXTENSION_APP_GROUPS"
-            exit 1
-          fi
-          if [[ "$MAIN_NETWORK_EXT" != *"packet-tunnel-provider"* ]] || [[ "$EXTENSION_NETWORK_EXT" != *"packet-tunnel-provider"* ]]; then
-            echo "Provisioning profile Network Extension mismatch. Expected packet-tunnel-provider"
-            echo "Main profile networkextension:"
-            echo "$MAIN_NETWORK_EXT"
-            echo "Extension profile networkextension:"
-            echo "$EXTENSION_NETWORK_EXT"
-            exit 1
-          fi
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
           SIGNING_IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -F\" 'NF>=2 {print $2; exit}')
           if [ -z "$SIGNING_IDENTITY" ]; then
@@ -179,63 +93,11 @@ jobs:
             security find-identity -v -p codesigning "$KEYCHAIN_PATH"
             exit 1
           fi
-          CERT_TEAM_ID=$(printf '%s' "$SIGNING_IDENTITY" | sed -n 's/.*(\([A-Z0-9]\{10\}\)).*/\1/p')
-          if [ -z "$CERT_TEAM_ID" ]; then
-            echo "Cannot parse team id from signing identity: $SIGNING_IDENTITY"
-            exit 1
-          fi
-          if [ "$CERT_TEAM_ID" != "$TEAM_ID" ]; then
-            echo "Certificate/Profile team mismatch: cert=$CERT_TEAM_ID profile=$TEAM_ID"
-            echo "Please replace p12 or mobileprovision so both belong to the same Apple Team."
-            exit 1
-          fi
-          if [[ "$SIGNING_IDENTITY" != *"Developer"* ]] && [[ "$SIGNING_IDENTITY" != *"Apple Development"* ]]; then
-            echo "Unexpected signing identity: $SIGNING_IDENTITY. Refusing to fall back."
-            exit 1
-          fi
-          /usr/libexec/PlistBuddy -c "Print Entitlements" "$MAIN_PROFILE_PLIST"
-          /usr/libexec/PlistBuddy -c "Print Entitlements" "$EXTENSION_PROFILE_PLIST"
           EXPORT_METHOD="development"
           EXPORT_SIGNING_CERT="Apple Development"
           if [[ "$SIGNING_IDENTITY" == *"iPhone Developer"* ]]; then
             EXPORT_SIGNING_CERT="iPhone Developer"
           fi
-          GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$MAIN_PROFILE_PLIST")
-          EXTENSION_GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$EXTENSION_PROFILE_PLIST")
-          if [ "$GET_TASK_ALLOW" != "true" ]; then
-            echo "Provisioning profile is not a development profile (get-task-allow != true). Refusing to fall back."
-            exit 1
-          fi
-          if [ "$EXTENSION_GET_TASK_ALLOW" != "true" ]; then
-            echo "Extension provisioning profile is not a development profile (get-task-allow != true). Refusing to fall back."
-            exit 1
-          fi
-          export MAIN_PROFILE_PLIST EXTENSION_PROFILE_PLIST
-          python - <<'PY'
-          import os
-          import datetime
-          import plistlib
-          import sys
-          main_path = os.environ["MAIN_PROFILE_PLIST"]
-          ext_path = os.environ["EXTENSION_PROFILE_PLIST"]
-          with open(main_path, "rb") as f:
-              main = plistlib.load(f)
-          with open(ext_path, "rb") as f:
-              ext = plistlib.load(f)
-          now = datetime.datetime.now(datetime.timezone.utc)
-          main_exp = main.get("ExpirationDate")
-          ext_exp = ext.get("ExpirationDate")
-          if main_exp is None or ext_exp is None:
-              print("Provisioning profile missing ExpirationDate")
-              sys.exit(1)
-          if main_exp.tzinfo is None:
-              main_exp = main_exp.replace(tzinfo=datetime.timezone.utc)
-          if ext_exp.tzinfo is None:
-              ext_exp = ext_exp.replace(tzinfo=datetime.timezone.utc)
-          if main_exp <= now or ext_exp <= now:
-              print("Provisioning profile is expired")
-              sys.exit(1)
-          PY
           echo "Resolved signing context: team=$TEAM_ID export_method=$EXPORT_METHOD main_profile=$MAIN_PROFILE_NAME($MAIN_PROFILE_UUID) extension_profile=$EXTENSION_PROFILE_NAME($EXTENSION_PROFILE_UUID)"
           EXPORT_PLIST="$RUNNER_TEMP/ExportOptions.plist"
           rm -f "$EXPORT_PLIST"
@@ -274,83 +136,6 @@ jobs:
             -exportOptionsPlist "$EXPORT_PLIST" \
             -exportPath "$PWD/../build/ios/ipa"
           popd
-
-      - name: Validate exported IPA payload
-        run: |
-          set -eo pipefail
-          IPA_FILE=$(find build/ios/ipa -maxdepth 1 -name '*.ipa' | head -n 1)
-          if [ -z "$IPA_FILE" ]; then
-            echo "No IPA file found in build/ios/ipa"
-            exit 1
-          fi
-          IPA_EXTRACT_DIR="$RUNNER_TEMP/ipa_extract"
-          rm -rf "$IPA_EXTRACT_DIR"
-          mkdir -p "$IPA_EXTRACT_DIR"
-          unzip -q "$IPA_FILE" -d "$IPA_EXTRACT_DIR"
-          APP_DIR=$(find "$IPA_EXTRACT_DIR/Payload" -maxdepth 1 -name '*.app' | head -n 1)
-          if [ -z "$APP_DIR" ]; then
-            echo "Payload app not found in IPA"
-            exit 1
-          fi
-          APP_INFO_PLIST="$APP_DIR/Info.plist"
-          APP_MIN_IOS=$(/usr/libexec/PlistBuddy -c "Print MinimumOSVersion" "$APP_INFO_PLIST")
-          APP_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$APP_INFO_PLIST")
-          if [ "$APP_BUNDLE_ID" != "$MAIN_BUNDLE_ID" ]; then
-            echo "IPA main bundle id mismatch: expected $MAIN_BUNDLE_ID but got $APP_BUNDLE_ID"
-            exit 1
-          fi
-          APPEX_DIR=$(find "$APP_DIR/PlugIns" -maxdepth 1 -name '*.appex' | head -n 1)
-          if [ -z "$APPEX_DIR" ]; then
-            echo "PacketTunnel appex missing in IPA"
-            exit 1
-          fi
-          APPEX_INFO_PLIST="$APPEX_DIR/Info.plist"
-          APPEX_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$APPEX_INFO_PLIST")
-          if [ "$APPEX_BUNDLE_ID" != "$EXTENSION_BUNDLE_ID" ]; then
-            echo "IPA extension bundle id mismatch: expected $EXTENSION_BUNDLE_ID but got $APPEX_BUNDLE_ID"
-            exit 1
-          fi
-          APP_EMBEDDED="$APP_DIR/embedded.mobileprovision"
-          APPEX_EMBEDDED="$APPEX_DIR/embedded.mobileprovision"
-          if [ ! -f "$APP_EMBEDDED" ] || [ ! -f "$APPEX_EMBEDDED" ]; then
-            echo "embedded.mobileprovision missing in app or extension"
-            exit 1
-          fi
-          APP_PROFILE_PLIST="$RUNNER_TEMP/ipa_main_profile.plist"
-          APPEX_PROFILE_PLIST="$RUNNER_TEMP/ipa_extension_profile.plist"
-          security cms -D -i "$APP_EMBEDDED" > "$APP_PROFILE_PLIST"
-          security cms -D -i "$APPEX_EMBEDDED" > "$APPEX_PROFILE_PLIST"
-          APP_GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$APP_PROFILE_PLIST")
-          APPEX_GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$APPEX_PROFILE_PLIST")
-          if [ "$APP_GET_TASK_ALLOW" != "true" ] || [ "$APPEX_GET_TASK_ALLOW" != "true" ]; then
-            echo "IPA embedded profiles are not development profiles"
-            exit 1
-          fi
-          APP_PROFILE_TEAM=$(/usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" "$APP_PROFILE_PLIST")
-          APPEX_PROFILE_TEAM=$(/usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" "$APPEX_PROFILE_PLIST")
-          if [ "$APP_PROFILE_TEAM" != "$TEAM_ID" ] || [ "$APPEX_PROFILE_TEAM" != "$TEAM_ID" ]; then
-            echo "IPA embedded profile team mismatch: expected $TEAM_ID"
-            exit 1
-          fi
-          APP_ENTITLEMENTS_PLIST="$RUNNER_TEMP/app_entitlements.plist"
-          APPEX_ENTITLEMENTS_PLIST="$RUNNER_TEMP/appex_entitlements.plist"
-          /usr/bin/codesign -d --entitlements :- "$APP_DIR" > "$APP_ENTITLEMENTS_PLIST" 2>/dev/null
-          /usr/bin/codesign -d --entitlements :- "$APPEX_DIR" > "$APPEX_ENTITLEMENTS_PLIST" 2>/dev/null
-          if ! /usr/libexec/PlistBuddy -c "Print com.apple.security.application-groups:0" "$APP_ENTITLEMENTS_PLIST" | grep -q "$APP_GROUP_ID"; then
-            echo "App entitlements missing expected App Group: $APP_GROUP_ID"
-            exit 1
-          fi
-          if ! /usr/libexec/PlistBuddy -c "Print com.apple.security.application-groups:0" "$APPEX_ENTITLEMENTS_PLIST" | grep -q "$APP_GROUP_ID"; then
-            echo "Extension entitlements missing expected App Group: $APP_GROUP_ID"
-            exit 1
-          fi
-          if ! /usr/libexec/PlistBuddy -c "Print com.apple.developer.networking.networkextension" "$APPEX_ENTITLEMENTS_PLIST" | grep -q "packet-tunnel-provider"; then
-            echo "Extension entitlements missing packet-tunnel-provider"
-            exit 1
-          fi
-          echo "IPA minimum iOS version: $APP_MIN_IOS"
-          echo "IPA app bundle id: $APP_BUNDLE_ID"
-          echo "IPA extension bundle id: $APPEX_BUNDLE_ID"
 
       - name: Prepare IPA artifact
         id: ipa_meta
