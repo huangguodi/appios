@@ -226,40 +226,47 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
   private func buildNetworkSettings(runtimeTunConfig: RuntimeTunConfig) -> NEPacketTunnelNetworkSettings {
     let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
-    if runtimeTunConfig.autoRoute {
-      settings.mtu = NSNumber(value: runtimeTunConfig.mtu ?? 1500)
+    settings.mtu = NSNumber(value: runtimeTunConfig.mtu ?? 1500)
 
-      let ipv4AddressPairs = runtimeTunConfig.inet4Address.compactMap(parseIPv4CIDR)
-      let ipv4Addresses = ipv4AddressPairs.isEmpty
-        ? ["172.19.0.1"]
-        : ipv4AddressPairs.map { $0.address }
-      let ipv4Masks = ipv4AddressPairs.isEmpty
-        ? ["255.255.255.252"]
-        : ipv4AddressPairs.map { $0.mask }
-      let ipv4 = NEIPv4Settings(addresses: ipv4Addresses, subnetMasks: ipv4Masks)
-      let ipv4IncludedRoutes = runtimeTunConfig.inet4RouteAddress.compactMap(parseIPv4Route)
-      ipv4.includedRoutes = ipv4IncludedRoutes.isEmpty ? [NEIPv4Route.default()] : ipv4IncludedRoutes
-      let ipv4ExcludedRoutes = runtimeTunConfig.inet4RouteExcludeAddress.compactMap(parseIPv4Route)
-      if !ipv4ExcludedRoutes.isEmpty {
-        ipv4.excludedRoutes = ipv4ExcludedRoutes
-      }
-      settings.ipv4Settings = ipv4
+    let ipv4AddressPairs = runtimeTunConfig.inet4Address.compactMap(parseIPv4CIDR)
+    let ipv4Addresses = ipv4AddressPairs.isEmpty
+      ? ["172.19.0.1"]
+      : ipv4AddressPairs.map { $0.address }
+    let ipv4Masks = ipv4AddressPairs.isEmpty
+      ? ["255.255.255.252"]
+      : ipv4AddressPairs.map { $0.mask }
+    let ipv4 = NEIPv4Settings(addresses: ipv4Addresses, subnetMasks: ipv4Masks)
+    let ipv4IncludedRoutes = runtimeTunConfig.inet4RouteAddress.compactMap(parseIPv4Route)
+    ipv4.includedRoutes = ipv4IncludedRoutes.isEmpty ? [NEIPv4Route.default()] : ipv4IncludedRoutes
+    let ipv4ExcludedRoutes = runtimeTunConfig.inet4RouteExcludeAddress.compactMap(parseIPv4Route)
+    if !ipv4ExcludedRoutes.isEmpty {
+      ipv4.excludedRoutes = ipv4ExcludedRoutes
+    }
+    settings.ipv4Settings = ipv4
 
-      let ipv6AddressPairs = runtimeTunConfig.inet6Address.compactMap(parseIPv6CIDR)
-      let ipv6Addresses = ipv6AddressPairs.isEmpty
-        ? ["fdfe:dcbe:9876::1"]
-        : ipv6AddressPairs.map { $0.address }
-      let ipv6Prefix = ipv6AddressPairs.isEmpty
-        ? [NSNumber(value: 126)]
-        : ipv6AddressPairs.map { $0.prefix }
-      let ipv6 = NEIPv6Settings(addresses: ipv6Addresses, networkPrefixLengths: ipv6Prefix)
-      let ipv6IncludedRoutes = runtimeTunConfig.inet6RouteAddress.compactMap(parseIPv6Route)
-      ipv6.includedRoutes = ipv6IncludedRoutes.isEmpty ? [NEIPv6Route.default()] : ipv6IncludedRoutes
-      let ipv6ExcludedRoutes = runtimeTunConfig.inet6RouteExcludeAddress.compactMap(parseIPv6Route)
-      if !ipv6ExcludedRoutes.isEmpty {
-        ipv6.excludedRoutes = ipv6ExcludedRoutes
-      }
-      settings.ipv6Settings = ipv6
+    let ipv6AddressPairs = runtimeTunConfig.inet6Address.compactMap(parseIPv6CIDR)
+    let ipv6Addresses = ipv6AddressPairs.isEmpty
+      ? ["fdfe:dcbe:9876::1"]
+      : ipv6AddressPairs.map { $0.address }
+    let ipv6Prefix = ipv6AddressPairs.isEmpty
+      ? [NSNumber(value: 126)]
+      : ipv6AddressPairs.map { $0.prefix }
+    let ipv6 = NEIPv6Settings(addresses: ipv6Addresses, networkPrefixLengths: ipv6Prefix)
+    let ipv6IncludedRoutes = runtimeTunConfig.inet6RouteAddress.compactMap(parseIPv6Route)
+    ipv6.includedRoutes = ipv6IncludedRoutes.isEmpty ? [NEIPv6Route.default()] : ipv6IncludedRoutes
+    let ipv6ExcludedRoutes = runtimeTunConfig.inet6RouteExcludeAddress.compactMap(parseIPv6Route)
+    if !ipv6ExcludedRoutes.isEmpty {
+      ipv6.excludedRoutes = ipv6ExcludedRoutes
+    }
+    settings.ipv6Settings = ipv6
+
+    let dnsServers = runtimeTunConfig.dnsServers.filter {
+      isValidIPv4Address($0) || isValidIPv6Address($0)
+    }
+    if !dnsServers.isEmpty {
+      let dns = NEDNSSettings(servers: dnsServers)
+      dns.matchDomains = [""]
+      settings.dnsSettings = dns
     }
     return settings
   }
@@ -286,7 +293,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     let dnsSection = topLevelSection(named: "dns", from: lines)
 
     var config = RuntimeTunConfig()
-    config.autoRoute = parseBoolValue(key: "auto-route", in: tunSection) ?? false
+    config.autoRoute = false
     config.mtu = parseIntValue(key: "mtu", in: tunSection)
     config.inet4Address = parseListValue(key: "inet4-address", in: tunSection)
     config.inet6Address = parseListValue(key: "inet6-address", in: tunSection)
@@ -344,6 +351,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       stack: system
       auto-route: false
       auto-detect-interface: true
+      mtu: 1500
+      inet4-address: [172.19.0.1/30]
+      inet6-address: [fdfe:dcbe:9876::1/126]
+      route-address: [0.0.0.0/0, ::/0]
       dns-hijack: []
 
     """
@@ -825,6 +836,14 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       ("auto-detect-interface", { indent in "\(indent)auto-detect-interface: true" }),
       ("file-descriptor", { indent in "\(indent)file-descriptor: \(fileDescriptor)" }),
     ]
+    let defaultKeyLines: [(key: String, line: (String) -> String)] = [
+      ("auto-route", { indent in "\(indent)auto-route: false" }),
+      ("mtu", { indent in "\(indent)mtu: 1500" }),
+      ("inet4-address", { indent in "\(indent)inet4-address: [172.19.0.1/30]" }),
+      ("inet6-address", { indent in "\(indent)inet6-address: [fdfe:dcbe:9876::1/126]" }),
+      ("route-address", { indent in "\(indent)route-address: [0.0.0.0/0, ::/0]" }),
+      ("dns-hijack", { indent in "\(indent)dns-hijack: []" }),
+    ]
 
     guard let tunIndex else {
       let defaultBlock = [
@@ -833,6 +852,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         "  stack: system",
         "  auto-route: false",
         "  auto-detect-interface: true",
+        "  mtu: 1500",
+        "  inet4-address: [172.19.0.1/30]",
+        "  inet6-address: [fdfe:dcbe:9876::1/126]",
+        "  route-address: [0.0.0.0/0, ::/0]",
         "  dns-hijack: []",
         "  file-descriptor: \(fileDescriptor)",
       ].joined(separator: "\n")
@@ -876,6 +899,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             break
           }
         }
+        for (key, _) in defaultKeyLines where trimmed.hasPrefix("\(key):") {
+          presentKeys.insert(key)
+        }
       }
     }
 
@@ -889,9 +915,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       break
     }
 
-    let toInsert = requiredKeyLines
-      .filter { !presentKeys.contains($0.key) }
-      .map { $0.line(indent) }
+    let toInsert =
+      requiredKeyLines
+        .filter { !presentKeys.contains($0.key) }
+        .map { $0.line(indent) } +
+      defaultKeyLines
+        .filter { !presentKeys.contains($0.key) }
+        .map { $0.line(indent) }
     if !toInsert.isEmpty {
       lines.insert(contentsOf: toInsert, at: insertAt)
     }
