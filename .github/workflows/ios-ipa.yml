@@ -174,18 +174,6 @@ jobs:
             CODE_SIGNING_ALLOWED=YES \
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
-            "Runner:DEVELOPMENT_TEAM=$TEAM_ID" \
-            "PacketTunnel:DEVELOPMENT_TEAM=$TEAM_ID" \
-            "Runner:CODE_SIGN_STYLE=Manual" \
-            "PacketTunnel:CODE_SIGN_STYLE=Manual" \
-            "Runner:CODE_SIGN_IDENTITY=$SIGNING_IDENTITY" \
-            "PacketTunnel:CODE_SIGN_IDENTITY=$SIGNING_IDENTITY" \
-            "Runner:PRODUCT_BUNDLE_IDENTIFIER=$MAIN_BUNDLE_ID" \
-            "PacketTunnel:PRODUCT_BUNDLE_IDENTIFIER=$EXTENSION_BUNDLE_ID" \
-            "Runner:PROVISIONING_PROFILE=$MAIN_PROFILE_UUID" \
-            "PacketTunnel:PROVISIONING_PROFILE=$EXTENSION_PROFILE_UUID" \
-            "Runner:PROVISIONING_PROFILE_SPECIFIER=$MAIN_PROFILE_NAME" \
-            "PacketTunnel:PROVISIONING_PROFILE_SPECIFIER=$EXTENSION_PROFILE_NAME" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH"
           xcodebuild -exportArchive \
             -archivePath "$PWD/build/Runner.xcarchive" \
