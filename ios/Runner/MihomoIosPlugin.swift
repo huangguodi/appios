@@ -8,13 +8,23 @@ final class MihomoIosPlugin {
   private let tunnelBundleId = "com.xiangyu.clash.packettunnel"
   private let appGroupId = "group.com.xiangyu.clash"
   private let managerQueue = DispatchQueue(label: "com.accelerator.tg.mihomo.vpn.manager")
+  private var registeredMessengerKeys = Set<ObjectIdentifier>()
 
   private init() {}
 
   func register(with controller: FlutterViewController) {
+    register(with: controller.binaryMessenger)
+  }
+
+  func register(with messenger: FlutterBinaryMessenger) {
+    let messengerKey = ObjectIdentifier(messenger as AnyObject)
+    if registeredMessengerKeys.contains(messengerKey) {
+      return
+    }
+    registeredMessengerKeys.insert(messengerKey)
     let mihomoChannel = FlutterMethodChannel(
       name: "com.accelerator.tg/mihomo",
-      binaryMessenger: controller.binaryMessenger
+      binaryMessenger: messenger
     )
     mihomoChannel.setMethodCallHandler { [weak self] call, result in
       guard let self else {
@@ -26,7 +36,7 @@ final class MihomoIosPlugin {
 
     let securityChannel = FlutterMethodChannel(
       name: "com.accelerator.tg/security",
-      binaryMessenger: controller.binaryMessenger
+      binaryMessenger: messenger
     )
     securityChannel.setMethodCallHandler { call, result in
       switch call.method {
@@ -41,7 +51,7 @@ final class MihomoIosPlugin {
 
     let trafficChannel = FlutterEventChannel(
       name: "com.accelerator.tg/mihomo/traffic",
-      binaryMessenger: controller.binaryMessenger
+      binaryMessenger: messenger
     )
     trafficChannel.setStreamHandler(TrafficStreamHandler(plugin: self))
   }

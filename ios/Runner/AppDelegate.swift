@@ -15,6 +15,9 @@ import UIKit
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    let registry = engineBridge.pluginRegistry
+    GeneratedPluginRegistrant.register(with: registry)
+    let registrar = registry.registrar(forPlugin: "MihomoIosPlugin")
+    MihomoIosPlugin.shared.register(with: registrar.messenger())
   }
 }

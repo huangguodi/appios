@@ -31,6 +31,7 @@
 - App 侧 `MihomoIosPlugin` 已补充 App Group/Extension 预检、旧/重复 VPN manager 清理与失败后重建一次配置；`getWorkingDirectory` 改为显式返回错误，不再因 App Group 缺失直接崩溃
 - Flutter iOS 启动探测已补充 MethodChannel 单次调用超时、更多 ready 重试、共享状态 `updatedAt` 新鲜度校验；新增 `Network Extension` 能力缺失与授权超时错误映射
 - iOS 冷启动 `SERVER-URL` 链路继续加固：`initNativeKeys()` 在 iOS 下支持分次累积有效 key（避免单次任一 key 空值导致整体失败），并新增启动失败调试日志弹窗（可查看/复制 Native key trace + App logs）；Android/Windows 保持原有一次性拉取语义不变
+- iOS 通道注册时序修复：`MihomoIosPlugin` 新增按 `FlutterBinaryMessenger` 注册入口，并在 `didInitializeImplicitFlutterEngine` 中显式注册自定义通道，避免冷启动阶段仅注册 GeneratedPlugin 导致 `isReady` 偶发不可达
 
 ### 待办
 
