@@ -165,24 +165,28 @@ jobs:
           EXPORT_PLIST="$RUNNER_TEMP/ExportOptions.plist"
           rm -f "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :method string $EXPORT_METHOD" "$EXPORT_PLIST"
-          /usr/libexec/PlistBuddy -c "Add :signingStyle string automatic" "$EXPORT_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :signingStyle string manual" "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :signingCertificate string $EXPORT_SIGNING_CERT" "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$EXPORT_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles dict" "$EXPORT_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$MAIN_BUNDLE_ID string $MAIN_PROFILE_NAME" "$EXPORT_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$EXTENSION_BUNDLE_ID string $EXTENSION_PROFILE_NAME" "$EXPORT_PLIST"
           pushd ios
           xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release \
             -sdk iphoneos \
             -destination "generic/platform=iOS" \
             -archivePath "$PWD/build/Runner.xcarchive" archive \
-            -allowProvisioningUpdates \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            CODE_SIGN_IDENTITY="Apple Development" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="iPhone Developer" \
             "Runner:DEVELOPMENT_TEAM=$TEAM_ID" \
             "PacketTunnel:DEVELOPMENT_TEAM=$TEAM_ID" \
-            "Runner:CODE_SIGN_STYLE=Automatic" \
-            "PacketTunnel:CODE_SIGN_STYLE=Automatic" \
+            "Runner:CODE_SIGN_STYLE=Manual" \
+            "PacketTunnel:CODE_SIGN_STYLE=Manual" \
             "Runner:PRODUCT_BUNDLE_IDENTIFIER=$MAIN_BUNDLE_ID" \
             "PacketTunnel:PRODUCT_BUNDLE_IDENTIFIER=$EXTENSION_BUNDLE_ID" \
+            "Runner:PROVISIONING_PROFILE_SPECIFIER=$MAIN_PROFILE_NAME" \
+            "PacketTunnel:PROVISIONING_PROFILE_SPECIFIER=$EXTENSION_PROFILE_NAME" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH"
           xcodebuild -exportArchive \
             -archivePath "$PWD/build/Runner.xcarchive" \
