@@ -96,6 +96,22 @@ jobs:
           if [ -n "$PROFILE_EXTENSION_BUNDLE_ID" ] && [ "$PROFILE_EXTENSION_BUNDLE_ID" != "*" ]; then
             EXTENSION_BUNDLE_ID="$PROFILE_EXTENSION_BUNDLE_ID"
           fi
+          if ! /usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.security.application-groups" "$MAIN_PROFILE_PLIST" >/dev/null 2>&1; then
+            echo "Main provisioning profile missing App Groups entitlement"
+            exit 1
+          fi
+          if ! /usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.developer.networking.networkextension" "$MAIN_PROFILE_PLIST" >/dev/null 2>&1; then
+            echo "Main provisioning profile missing Network Extensions entitlement"
+            exit 1
+          fi
+          if ! /usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.security.application-groups" "$EXTENSION_PROFILE_PLIST" >/dev/null 2>&1; then
+            echo "Extension provisioning profile missing App Groups entitlement"
+            exit 1
+          fi
+          if ! /usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.developer.networking.networkextension" "$EXTENSION_PROFILE_PLIST" >/dev/null 2>&1; then
+            echo "Extension provisioning profile missing Network Extensions entitlement"
+            exit 1
+          fi
           GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$MAIN_PROFILE_PLIST")
           HAS_PROVISIONED_DEVICES="false"
           if /usr/libexec/PlistBuddy -c "Print ProvisionedDevices:0" "$MAIN_PROFILE_PLIST" >/dev/null 2>&1; then
@@ -111,18 +127,17 @@ jobs:
             EXPORT_METHOD="ad-hoc"
           fi
           EXPORT_PLIST="$RUNNER_TEMP/ExportOptions.plist"
+          rm -f "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :method string $EXPORT_METHOD" "$EXPORT_PLIST"
-          /usr/libexec/PlistBuddy -c "Add :signingStyle string manual" "$EXPORT_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :signingStyle string automatic" "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$EXPORT_PLIST"
-          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles dict" "$EXPORT_PLIST"
-          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$MAIN_BUNDLE_ID string $MAIN_PROFILE_NAME" "$EXPORT_PLIST"
-          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$EXTENSION_BUNDLE_ID string $EXTENSION_PROFILE_NAME" "$EXPORT_PLIST"
           pushd ios
           xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release \
             -destination "generic/platform=iOS" \
             -archivePath "$PWD/build/Runner.xcarchive" archive \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_STYLE=Automatic \
+            -allowProvisioningUpdates \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH"
           xcodebuild -exportArchive \
             -archivePath "$PWD/build/Runner.xcarchive" \
