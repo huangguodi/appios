@@ -13,9 +13,13 @@ jobs:
       MAIN_BUNDLE_ID: com.xiangyu.clash
       EXTENSION_BUNDLE_ID: com.xiangyu.clash.packettunnel
       APP_GROUP_ID: group.com.xiangyu.clash
+      IOS_CERT_DIR: ios_cert
       IOS_P12_FILE: ios_cert/dev.p12
       IOS_MAIN_MOBILEPROVISION_FILE: ios_cert/Clash_Main_Profile.mobileprovision
       IOS_EXTENSION_MOBILEPROVISION_FILE: ios_cert/Clash_Extension_Profile.mobileprovision
+      EXPECTED_P12_SHA256: 4A73C1E504169FBBF65209B58B987CA6CB6B7383405A193317517349A0155B5F
+      EXPECTED_MAIN_PROFILE_SHA256: E43342BEB959634BC2552318AEACB9754F8086342F9A3AA9456F897F3AA72FCD
+      EXPECTED_EXTENSION_PROFILE_SHA256: B84E76028066D8CE1E6F4A3B0C8EA6146203DFFB53CCE3E88791008DE535C1EA
       IOS_P12_PASSWORD: 112233
 
     steps:
@@ -39,6 +43,10 @@ jobs:
       - name: Build IPA (signed from repository cert files)
         run: |
           set -eo pipefail
+          if [ ! -d "$IOS_CERT_DIR" ]; then
+            echo "Missing certificate directory: $IOS_CERT_DIR"
+            exit 1
+          fi
           if [ ! -f "$IOS_P12_FILE" ]; then
             echo "Missing certificate file: $IOS_P12_FILE"
             exit 1
@@ -49,6 +57,27 @@ jobs:
           fi
           if [ ! -f "$IOS_EXTENSION_MOBILEPROVISION_FILE" ]; then
             echo "Missing extension provisioning file: $IOS_EXTENSION_MOBILEPROVISION_FILE"
+            exit 1
+          fi
+          P12_SHA256=$(shasum -a 256 "$IOS_P12_FILE" | awk '{print toupper($1)}')
+          MAIN_PROFILE_SHA256=$(shasum -a 256 "$IOS_MAIN_MOBILEPROVISION_FILE" | awk '{print toupper($1)}')
+          EXTENSION_PROFILE_SHA256=$(shasum -a 256 "$IOS_EXTENSION_MOBILEPROVISION_FILE" | awk '{print toupper($1)}')
+          if [ "$P12_SHA256" != "$EXPECTED_P12_SHA256" ]; then
+            echo "P12 SHA256 mismatch"
+            echo "Expected: $EXPECTED_P12_SHA256"
+            echo "Actual:   $P12_SHA256"
+            exit 1
+          fi
+          if [ "$MAIN_PROFILE_SHA256" != "$EXPECTED_MAIN_PROFILE_SHA256" ]; then
+            echo "Main profile SHA256 mismatch"
+            echo "Expected: $EXPECTED_MAIN_PROFILE_SHA256"
+            echo "Actual:   $MAIN_PROFILE_SHA256"
+            exit 1
+          fi
+          if [ "$EXTENSION_PROFILE_SHA256" != "$EXPECTED_EXTENSION_PROFILE_SHA256" ]; then
+            echo "Extension profile SHA256 mismatch"
+            echo "Expected: $EXPECTED_EXTENSION_PROFILE_SHA256"
+            echo "Actual:   $EXTENSION_PROFILE_SHA256"
             exit 1
           fi
           CERT_PATH=$RUNNER_TEMP/cert.p12
@@ -75,6 +104,14 @@ jobs:
           MAIN_PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" "$MAIN_PROFILE_PLIST")
           EXTENSION_PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" "$EXTENSION_PROFILE_PLIST")
           EXTENSION_PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" "$EXTENSION_PROFILE_PLIST")
+          if [ "$MAIN_PROFILE_NAME" != "Clash_Main_Profile" ]; then
+            echo "Main provisioning profile name mismatch: expected Clash_Main_Profile but got $MAIN_PROFILE_NAME"
+            exit 1
+          fi
+          if [ "$EXTENSION_PROFILE_NAME" != "Clash_Extension_Profile" ]; then
+            echo "Extension provisioning profile name mismatch: expected Clash_Extension_Profile but got $EXTENSION_PROFILE_NAME"
+            exit 1
+          fi
           cp "$MAIN_PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$MAIN_PROFILE_UUID.mobileprovision"
           cp "$EXTENSION_PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$EXTENSION_PROFILE_UUID.mobileprovision"
           TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" "$MAIN_PROFILE_PLIST")
