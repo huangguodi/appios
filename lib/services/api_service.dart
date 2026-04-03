@@ -559,6 +559,7 @@ class ApiService {
   String _dynamicAesKey = "";
   String _dynamicObfuscateKey = "";
   bool _keysLoaded = false;
+  final List<String> _nativeKeyTrace = <String>[];
 
   static const MethodChannel _mihomoChannel = MethodChannel(
     'com.accelerator.tg/mihomo',
@@ -571,6 +572,9 @@ class ApiService {
   static const int _nativeKeyFetchAttempts = 8;
   static const Duration _nativeKeyFetchRetryDelay = Duration(
     milliseconds: 250,
+  );
+  static const Duration _nativeKeyFetchCallTimeout = Duration(
+    milliseconds: 900,
   );
 
   Future<bool> _waitForNativeChannelReady() async {
@@ -598,39 +602,59 @@ class ApiService {
 
     try {
       WidgetsFlutterBinding.ensureInitialized();
+      if (Platform.isIOS) {
+        _nativeKeyTrace.clear();
+      }
       final channelReady = await _waitForNativeChannelReady();
       if (!channelReady) {
+        _recordNativeKeyTrace("channel not ready");
         _log("DEBUG: Native channel not ready");
         return;
       }
 
       final attempts = Platform.isIOS ? _nativeKeyFetchAttempts : 1;
+      var cachedAes = _dynamicAesKey.trim();
+      var cachedObf = _dynamicObfuscateKey.trim();
+      var cachedUrl = _dynamicServerUrlKey.trim();
       for (var attempt = 0; attempt < attempts; attempt++) {
+        final label = 'attempt ${attempt + 1}/$attempts';
         try {
-          final aes = (await _mihomoChannel.invokeMethod<String>('getAesKey'))
-              ?.trim();
-          final obf =
-              (await _mihomoChannel.invokeMethod<String>('getObfuscateKey'))
-                  ?.trim();
-          final url =
-              (await _mihomoChannel.invokeMethod<String>('getServerUrlKey'))
-                  ?.trim();
+          final aes = await _invokeNativeKey('getAesKey');
+          final obf = await _invokeNativeKey('getObfuscateKey');
+          final url = await _invokeNativeKey('getServerUrlKey');
+          if (Platform.isIOS) {
+            if (aes.isNotEmpty) {
+              cachedAes = aes;
+            }
+            if (obf.isNotEmpty) {
+              cachedObf = obf;
+            }
+            if (url.isNotEmpty && _isValidServerUrl(url)) {
+              cachedUrl = url;
+            }
+          } else {
+            cachedAes = aes;
+            cachedObf = obf;
+            cachedUrl = url;
+          }
           final loaded =
-              aes != null &&
-              aes.isNotEmpty &&
-              obf != null &&
-              obf.isNotEmpty &&
-              url != null &&
-              _isValidServerUrl(url);
+              cachedAes.isNotEmpty &&
+              cachedObf.isNotEmpty &&
+              cachedUrl.isNotEmpty &&
+              _isValidServerUrl(cachedUrl);
+          _recordNativeKeyTrace(
+            '$label aes=${cachedAes.isNotEmpty ? "ok" : "empty"} obf=${cachedObf.isNotEmpty ? "ok" : "empty"} url=${cachedUrl.isNotEmpty ? "ok" : "empty"}',
+          );
           if (loaded) {
-            _dynamicAesKey = aes;
-            _dynamicObfuscateKey = obf;
-            _dynamicServerUrlKey = url;
+            _dynamicAesKey = cachedAes;
+            _dynamicObfuscateKey = cachedObf;
+            _dynamicServerUrlKey = cachedUrl;
             _keysLoaded = true;
             _log("DEBUG: Native keys loaded successfully.");
             return;
           }
         } catch (e) {
+          _recordNativeKeyTrace('$label failed: $e');
           _log("DEBUG: Native key fetch attempt failed. Error: $e");
         }
         if (attempt + 1 < attempts) {
@@ -640,8 +664,21 @@ class ApiService {
       _keysLoaded = false;
       _log("DEBUG: Native keys not ready yet.");
     } catch (e) {
+      _recordNativeKeyTrace('init exception: $e');
       _keysLoaded = false;
       _log("DEBUG: Failed to load native keys. Error: $e");
+    }
+  }
+
+  Future<String> _invokeNativeKey(String method) async {
+    try {
+      final value = await _mihomoChannel
+          .invokeMethod<String>(method)
+          .timeout(_nativeKeyFetchCallTimeout);
+      return value?.trim() ?? '';
+    } catch (e) {
+      _recordNativeKeyTrace('$method error: $e');
+      return '';
     }
   }
 
@@ -660,6 +697,29 @@ class ApiService {
     await initNativeKeys(forceRefresh: true);
     final url = _dynamicServerUrlKey.trim();
     return url.isNotEmpty && _isValidServerUrl(url);
+  }
+
+  String nativeKeyDebugReport({int maxAppLogLines = 120}) {
+    final trace = _nativeKeyTrace.isEmpty
+        ? 'no native key trace'
+        : _nativeKeyTrace.join('\n');
+    final logs = AppLogger.dumpLogs().split('\n');
+    final picked = logs.length > maxAppLogLines
+        ? logs.sublist(logs.length - maxAppLogLines)
+        : logs;
+    final appLogs = picked.join('\n');
+    return 'Native Key Trace:\n$trace\n\nApp Logs:\n$appLogs';
+  }
+
+  void _recordNativeKeyTrace(String line) {
+    final now = DateTime.now();
+    final h = now.hour.toString().padLeft(2, '0');
+    final m = now.minute.toString().padLeft(2, '0');
+    final s = now.second.toString().padLeft(2, '0');
+    _nativeKeyTrace.add('[$h:$m:$s] $line');
+    if (_nativeKeyTrace.length > 120) {
+      _nativeKeyTrace.removeRange(0, _nativeKeyTrace.length - 120);
+    }
   }
 
   Future<Uri?> resolveStartupProbeUri() async {

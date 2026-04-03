@@ -42,6 +42,7 @@ class _SplashPageState extends State<SplashPage> {
   bool _isRetryingStartup = false;
   String? _startupFailureTitle;
   String? _startupFailureDetail;
+  String? _startupFailureDebugLog;
   List<({String host, int port})>? _cachedStartupProbeTargets;
 
   @override
@@ -80,6 +81,7 @@ class _SplashPageState extends State<SplashPage> {
           _showStartupFailure(
             category: AppFailureCategory.hotUpdate,
             detail: 'Native server url is empty',
+            debugLog: ApiService().nativeKeyDebugReport(),
           );
           return;
         }
@@ -840,6 +842,7 @@ class _SplashPageState extends State<SplashPage> {
   void _showStartupFailure({
     required AppFailureCategory category,
     String? detail,
+    String? debugLog,
   }) {
     if (!mounted) {
       return;
@@ -852,6 +855,7 @@ class _SplashPageState extends State<SplashPage> {
     setState(() {
       _startupFailureTitle = presentation.title;
       _startupFailureDetail = presentation.detail;
+      _startupFailureDebugLog = debugLog;
     });
   }
 
@@ -865,6 +869,7 @@ class _SplashPageState extends State<SplashPage> {
     setState(() {
       _startupFailureTitle = null;
       _startupFailureDetail = null;
+      _startupFailureDebugLog = null;
     });
   }
 
@@ -1040,6 +1045,7 @@ class _SplashPageState extends State<SplashPage> {
       _isRetryingStartup = true;
       _startupFailureTitle = null;
       _startupFailureDetail = null;
+      _startupFailureDebugLog = null;
     });
     try {
       await _initApp();
@@ -1175,6 +1181,7 @@ class _SplashPageState extends State<SplashPage> {
   Widget _buildStartupFailurePanel() {
     final title = _startupFailureTitle;
     final detail = _startupFailureDetail;
+    final debugLog = _startupFailureDebugLog;
     if (title == null || detail == null) {
       return const SizedBox.shrink();
     }
@@ -1221,9 +1228,73 @@ class _SplashPageState extends State<SplashPage> {
                 ),
               ),
             ),
+            if (Platform.isIOS && (debugLog?.isNotEmpty ?? false)) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _showStartupDebugLogDialog,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF96CBFF),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text(
+                  '查看调试日志',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _showStartupDebugLogDialog() async {
+    final logText = _startupFailureDebugLog;
+    if (logText == null || logText.isEmpty || !mounted) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF13283C),
+          title: const Text(
+            'iOS 启动调试日志',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: SelectableText(
+                logText,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  height: 1.45,
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: logText));
+              },
+              child: const Text('复制日志'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('关闭'),
+            ),
+          ],
+        );
+      },
     );
   }
 
