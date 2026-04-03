@@ -15,7 +15,7 @@ jobs:
       IOS_P12_FILE: ios_cert/dev.p12
       IOS_MAIN_MOBILEPROVISION_FILE: ios_cert/Clash_Main_Profile.mobileprovision
       IOS_EXTENSION_MOBILEPROVISION_FILE: ios_cert/Clash_Extension_Profile.mobileprovision
-      IOS_P12_PASSWORD: "112233"
+      IOS_P12_PASSWORD: 112233
 
     steps:
       - name: Checkout
@@ -72,6 +72,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH"
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/"*.mobileprovision
           security cms -D -i "$MAIN_PROFILE_PATH" > "$MAIN_PROFILE_PLIST"
           security cms -D -i "$EXTENSION_PROFILE_PATH" > "$EXTENSION_PROFILE_PLIST"
           MAIN_PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" "$MAIN_PROFILE_PLIST")
@@ -150,7 +151,7 @@ jobs:
           if [ "$EXPORT_METHOD" = "development" ]; then
             SIGNING_CERTIFICATE="Apple Development"
           fi
-          echo "Resolved signing context: team=$TEAM_ID export_method=$EXPORT_METHOD cert=$SIGNING_CERTIFICATE main_profile=$MAIN_PROFILE_NAME extension_profile=$EXTENSION_PROFILE_NAME"
+          echo "Resolved signing context: team=$TEAM_ID export_method=$EXPORT_METHOD cert=$SIGNING_CERTIFICATE main_profile=$MAIN_PROFILE_NAME($MAIN_PROFILE_UUID) extension_profile=$EXTENSION_PROFILE_NAME($EXTENSION_PROFILE_UUID)"
           EXPORT_PLIST="$RUNNER_TEMP/ExportOptions.plist"
           rm -f "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :method string $EXPORT_METHOD" "$EXPORT_PLIST"
@@ -158,8 +159,8 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :signingCertificate string $SIGNING_CERTIFICATE" "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :provisioningProfiles dict" "$EXPORT_PLIST"
-          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$MAIN_BUNDLE_ID string $MAIN_PROFILE_NAME" "$EXPORT_PLIST"
-          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$EXTENSION_BUNDLE_ID string $EXTENSION_PROFILE_NAME" "$EXPORT_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$MAIN_BUNDLE_ID string $MAIN_PROFILE_UUID" "$EXPORT_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$EXTENSION_BUNDLE_ID string $EXTENSION_PROFILE_UUID" "$EXPORT_PLIST"
           pushd ios
           xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release \
             -destination "generic/platform=iOS" \
@@ -172,6 +173,8 @@ jobs:
             "PacketTunnel:CODE_SIGN_STYLE=Manual" \
             "Runner:PRODUCT_BUNDLE_IDENTIFIER=$MAIN_BUNDLE_ID" \
             "PacketTunnel:PRODUCT_BUNDLE_IDENTIFIER=$EXTENSION_BUNDLE_ID" \
+            "Runner:PROVISIONING_PROFILE=$MAIN_PROFILE_UUID" \
+            "PacketTunnel:PROVISIONING_PROFILE=$EXTENSION_PROFILE_UUID" \
             "Runner:PROVISIONING_PROFILE_SPECIFIER=$MAIN_PROFILE_NAME" \
             "PacketTunnel:PROVISIONING_PROFILE_SPECIFIER=$EXTENSION_PROFILE_NAME" \
             "Runner:CODE_SIGN_IDENTITY=$SIGNING_CERTIFICATE" \
