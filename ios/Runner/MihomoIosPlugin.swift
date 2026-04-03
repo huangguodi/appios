@@ -8,10 +8,15 @@ final class MihomoIosPlugin {
   private let tunnelBundleId = "com.xiangyu.clash.packettunnel"
   private let appGroupId = "group.com.xiangyu.clash"
   private let managerQueue = DispatchQueue(label: "com.accelerator.tg.mihomo.vpn.manager")
+  private weak var registeredController: FlutterViewController?
 
   private init() {}
 
   func register(with controller: FlutterViewController) {
+    if registeredController === controller {
+      return
+    }
+    registeredController = controller
     let mihomoChannel = FlutterMethodChannel(
       name: "com.accelerator.tg/mihomo",
       binaryMessenger: controller.binaryMessenger
