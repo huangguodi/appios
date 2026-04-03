@@ -181,7 +181,8 @@ jobs:
             -exportPath "$PWD/../build/ios/ipa"
           popd
 
-      - name: Upload IPA to tmpfiles.org
+      - name: Prepare IPA artifact
+        id: ipa_meta
         run: |
           set -eo pipefail
           IPA_FILE=$(find build/ios/ipa -maxdepth 1 -name '*.ipa' | head -n 1)
@@ -189,17 +190,22 @@ jobs:
             echo "No IPA file found in build/ios/ipa"
             exit 1
           fi
-          UPLOAD_RESPONSE=$(curl -fsS --retry 3 --retry-all-errors -F "file=@${IPA_FILE}" https://tmpfiles.org/api/v1/upload)
-          IPA_URL=$(python -c "import json,sys; data=json.loads(sys.argv[1]); print(data.get('data', {}).get('url', ''))" "$UPLOAD_RESPONSE")
-          if [ -z "$IPA_URL" ]; then
-            echo "Upload to tmpfiles.org failed"
-            echo "$UPLOAD_RESPONSE"
-            exit 1
-          fi
-          echo "IPA_URL=$IPA_URL" >> "$GITHUB_ENV"
-          echo "IPA download URL: $IPA_URL"
+          IPA_NAME=$(basename "$IPA_FILE")
+          IPA_SHA256=$(shasum -a 256 "$IPA_FILE" | awk '{print $1}')
+          echo "ipa_file=$IPA_FILE" >> "$GITHUB_OUTPUT"
+          echo "ipa_name=$IPA_NAME" >> "$GITHUB_OUTPUT"
+          echo "ipa_sha256=$IPA_SHA256" >> "$GITHUB_OUTPUT"
           {
-            echo "## IPA 下载地址"
+            echo "## IPA 构建结果"
             echo
-            echo "$IPA_URL"
+            echo "- 文件名: $IPA_NAME"
+            echo "- SHA256: $IPA_SHA256"
+            echo "- 下载方式: 在本次工作流 Artifacts 中下载原始 IPA"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.ipa_meta.outputs.ipa_name }}
+          path: ${{ steps.ipa_meta.outputs.ipa_file }}
+          if-no-files-found: error
