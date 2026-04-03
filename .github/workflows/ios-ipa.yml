@@ -140,6 +140,7 @@ jobs:
             echo "$EXTENSION_NETWORK_EXT"
             exit 1
           fi
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
           /usr/libexec/PlistBuddy -c "Print Entitlements" "$MAIN_PROFILE_PLIST"
           /usr/libexec/PlistBuddy -c "Print Entitlements" "$EXTENSION_PROFILE_PLIST"
           GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$MAIN_PROFILE_PLIST")
@@ -156,17 +157,12 @@ jobs:
           elif [ "$HAS_PROVISIONED_DEVICES" = "true" ]; then
             EXPORT_METHOD="ad-hoc"
           fi
-          SIGNING_CERTIFICATE="Apple Distribution"
-          if [ "$EXPORT_METHOD" = "development" ]; then
-            SIGNING_CERTIFICATE="Apple Development"
-          fi
-          echo "Resolved signing context: team=$TEAM_ID export_method=$EXPORT_METHOD cert=$SIGNING_CERTIFICATE main_profile=$MAIN_PROFILE_NAME($MAIN_PROFILE_UUID) extension_profile=$EXTENSION_PROFILE_NAME($EXTENSION_PROFILE_UUID)"
+          echo "Resolved signing context: team=$TEAM_ID export_method=$EXPORT_METHOD main_profile=$MAIN_PROFILE_NAME($MAIN_PROFILE_UUID) extension_profile=$EXTENSION_PROFILE_NAME($EXTENSION_PROFILE_UUID)"
           EXPORT_PLIST="$RUNNER_TEMP/ExportOptions.plist"
           rm -f "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :method string $EXPORT_METHOD" "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :signingStyle string manual" "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$EXPORT_PLIST"
-          /usr/libexec/PlistBuddy -c "Add :signingCertificate string $SIGNING_CERTIFICATE" "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :provisioningProfiles dict" "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$MAIN_BUNDLE_ID string $MAIN_PROFILE_NAME" "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$EXTENSION_BUNDLE_ID string $EXTENSION_PROFILE_NAME" "$EXPORT_PLIST"
@@ -186,9 +182,6 @@ jobs:
             "PacketTunnel:PROVISIONING_PROFILE=$EXTENSION_PROFILE_UUID" \
             "Runner:PROVISIONING_PROFILE_SPECIFIER=$MAIN_PROFILE_NAME" \
             "PacketTunnel:PROVISIONING_PROFILE_SPECIFIER=$EXTENSION_PROFILE_NAME" \
-            "Runner:CODE_SIGN_IDENTITY=$SIGNING_CERTIFICATE" \
-            "PacketTunnel:CODE_SIGN_IDENTITY=$SIGNING_CERTIFICATE" \
-            CODE_SIGN_IDENTITY="$SIGNING_CERTIFICATE" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH"
           xcodebuild -exportArchive \
             -archivePath "$PWD/build/Runner.xcarchive" \
