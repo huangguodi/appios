@@ -141,31 +141,17 @@ jobs:
             echo "No codesigning identity found in keychain. Refusing to fall back."
             exit 1
           fi
-          if [[ "$SIGNING_IDENTITY" != *"Distribution"* ]] && [[ "$SIGNING_IDENTITY" != *"Apple Distribution"* ]]; then
+          if [[ "$SIGNING_IDENTITY" != *"Developer"* ]] && [[ "$SIGNING_IDENTITY" != *"Apple Development"* ]]; then
             echo "Unexpected signing identity: $SIGNING_IDENTITY. Refusing to fall back."
             exit 1
           fi
           /usr/libexec/PlistBuddy -c "Print Entitlements" "$MAIN_PROFILE_PLIST"
           /usr/libexec/PlistBuddy -c "Print Entitlements" "$EXTENSION_PROFILE_PLIST"
-          GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$MAIN_PROFILE_PLIST" 2>/dev/null || echo "false")
-          HAS_PROVISIONED_DEVICES="false"
-          if /usr/libexec/PlistBuddy -c "Print ProvisionedDevices:0" "$MAIN_PROFILE_PLIST" >/dev/null 2>&1; then
-            HAS_PROVISIONED_DEVICES="true"
-          fi
-          PROVISIONS_ALL_DEVICES=$(/usr/libexec/PlistBuddy -c "Print ProvisionsAllDevices" "$MAIN_PROFILE_PLIST" 2>/dev/null || echo "false")
-          EXPORT_METHOD=""
-          if [ "$PROVISIONS_ALL_DEVICES" = "true" ]; then
-            EXPORT_METHOD="enterprise"
-          elif [ "$HAS_PROVISIONED_DEVICES" = "true" ] && [ "$GET_TASK_ALLOW" = "false" ]; then
-            EXPORT_METHOD="ad-hoc"
-          fi
-          if [ -z "$EXPORT_METHOD" ]; then
-            echo "Provisioning profile is neither enterprise nor ad-hoc. Refusing to fall back."
-            exit 1
-          fi
-          EXPORT_SIGNING_CERT="Apple Distribution"
-          if [ "$GET_TASK_ALLOW" = "true" ]; then
-            echo "Provisioning profile is a development profile (get-task-allow=true). Refusing to fall back."
+          EXPORT_METHOD="development"
+          EXPORT_SIGNING_CERT="Apple Development"
+          GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$MAIN_PROFILE_PLIST")
+          if [ "$GET_TASK_ALLOW" != "true" ]; then
+            echo "Provisioning profile is not a development profile (get-task-allow != true). Refusing to fall back."
             exit 1
           fi
           echo "Resolved signing context: team=$TEAM_ID export_method=$EXPORT_METHOD main_profile=$MAIN_PROFILE_NAME($MAIN_PROFILE_UUID) extension_profile=$EXTENSION_PROFILE_NAME($EXTENSION_PROFILE_UUID)"
@@ -203,81 +189,17 @@ jobs:
             echo "No IPA file found in build/ios/ipa"
             exit 1
           fi
-          APP_INFO_PLIST="ios/build/Runner.xcarchive/Products/Applications/Runner.app/Info.plist"
-          if [ ! -f "$APP_INFO_PLIST" ]; then
-            echo "Missing app Info.plist in archive: $APP_INFO_PLIST"
+          UPLOAD_RESPONSE=$(curl -fsS --retry 3 --retry-all-errors -F "file=@${IPA_FILE}" https://tmpfiles.org/api/v1/upload)
+          IPA_URL=$(python -c "import json,sys; data=json.loads(sys.argv[1]); print(data.get('data', {}).get('url', ''))" "$UPLOAD_RESPONSE")
+          if [ -z "$IPA_URL" ]; then
+            echo "Upload to tmpfiles.org failed"
+            echo "$UPLOAD_RESPONSE"
             exit 1
           fi
-          BUNDLE_VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$APP_INFO_PLIST")
-          APP_TITLE=$(/usr/libexec/PlistBuddy -c "Print CFBundleDisplayName" "$APP_INFO_PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Print CFBundleName" "$APP_INFO_PLIST")
-          MANIFEST_FILE="build/ios/ipa/manifest.plist"
-          cat > "$MANIFEST_FILE" <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>items</key>
-            <array>
-              <dict>
-                <key>assets</key>
-                <array>
-                  <dict>
-                    <key>kind</key>
-                    <string>software-package</string>
-                    <key>url</key>
-                    <string>__IPA_URL__</string>
-                  </dict>
-                </array>
-                <key>metadata</key>
-                <dict>
-                  <key>bundle-identifier</key>
-                  <string>$MAIN_BUNDLE_ID</string>
-                  <key>bundle-version</key>
-                  <string>$BUNDLE_VERSION</string>
-                  <key>kind</key>
-                  <string>software</string>
-                  <key>title</key>
-                  <string>$APP_TITLE</string>
-                </dict>
-              </dict>
-            </array>
-          </dict>
-          </plist>
-          EOF
-          IPA_UPLOAD_RESPONSE=$(curl -fsS --retry 3 --retry-all-errors -F "file=@${IPA_FILE}" https://tmpfiles.org/api/v1/upload)
-          IPA_PAGE_URL=$(python -c "import json,sys; data=json.loads(sys.argv[1]); print(data.get('data', {}).get('url', ''))" "$IPA_UPLOAD_RESPONSE")
-          if [ -z "$IPA_PAGE_URL" ]; then
-            echo "IPA upload to tmpfiles.org failed"
-            echo "$IPA_UPLOAD_RESPONSE"
-            exit 1
-          fi
-          IPA_DIRECT_URL=$(printf '%s' "$IPA_PAGE_URL" | sed 's#://tmpfiles.org/#://tmpfiles.org/dl/#')
-          sed -i.bak "s#__IPA_URL__#$IPA_DIRECT_URL#g" "$MANIFEST_FILE"
-          rm -f "$MANIFEST_FILE.bak"
-          MANIFEST_UPLOAD_RESPONSE=$(curl -fsS --retry 3 --retry-all-errors -F "file=@${MANIFEST_FILE}" https://tmpfiles.org/api/v1/upload)
-          MANIFEST_PAGE_URL=$(python -c "import json,sys; data=json.loads(sys.argv[1]); print(data.get('data', {}).get('url', ''))" "$MANIFEST_UPLOAD_RESPONSE")
-          if [ -z "$MANIFEST_PAGE_URL" ]; then
-            echo "Manifest upload to tmpfiles.org failed"
-            echo "$MANIFEST_UPLOAD_RESPONSE"
-            exit 1
-          fi
-          MANIFEST_DIRECT_URL=$(printf '%s' "$MANIFEST_PAGE_URL" | sed 's#://tmpfiles.org/#://tmpfiles.org/dl/#')
-          OTA_URL="itms-services://?action=download-manifest&url=$MANIFEST_DIRECT_URL"
-          echo "IPA_URL=$IPA_PAGE_URL" >> "$GITHUB_ENV"
-          echo "IPA_DIRECT_URL=$IPA_DIRECT_URL" >> "$GITHUB_ENV"
-          echo "MANIFEST_URL=$MANIFEST_PAGE_URL" >> "$GITHUB_ENV"
-          echo "MANIFEST_DIRECT_URL=$MANIFEST_DIRECT_URL" >> "$GITHUB_ENV"
-          echo "OTA_INSTALL_URL=$OTA_URL" >> "$GITHUB_ENV"
-          echo "IPA page URL: $IPA_PAGE_URL"
-          echo "IPA direct URL: $IPA_DIRECT_URL"
-          echo "Manifest page URL: $MANIFEST_PAGE_URL"
-          echo "Manifest direct URL: $MANIFEST_DIRECT_URL"
-          echo "OTA install URL: $OTA_URL"
+          echo "IPA_URL=$IPA_URL" >> "$GITHUB_ENV"
+          echo "IPA download URL: $IPA_URL"
           {
-            echo "## iOS 安装地址"
+            echo "## IPA 下载地址"
             echo
-            echo "- IPA 页面地址: $IPA_PAGE_URL"
-            echo "- IPA 直链: $IPA_DIRECT_URL"
-            echo "- Manifest 直链: $MANIFEST_DIRECT_URL"
-            echo "- 网页直装链接: $OTA_URL"
+            echo "$IPA_URL"
           } >> "$GITHUB_STEP_SUMMARY"
