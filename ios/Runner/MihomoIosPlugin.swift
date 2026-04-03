@@ -4,13 +4,28 @@ import NetworkExtension
 
 final class MihomoIosPlugin {
   static let shared = MihomoIosPlugin()
+  private enum AppConfigKey {
+    static let appGroupId = "IOSAppGroupIdentifier"
+    static let packetTunnelBundleId = "IOSPacketTunnelBundleIdentifier"
+  }
 
-  private let tunnelBundleId = "com.xiangyu.clash.packettunnel"
-  private let appGroupId = "group.com.xiangyu.clash"
   private let managerQueue = DispatchQueue(label: "com.accelerator.tg.mihomo.vpn.manager")
   private weak var registeredController: FlutterViewController?
 
   private init() {}
+
+  private var mainBundleId: String {
+    let bundleId = Bundle.main.bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
+    return (bundleId?.isEmpty == false) ? bundleId! : "app.bundle"
+  }
+
+  private var tunnelBundleId: String {
+    configValue(for: AppConfigKey.packetTunnelBundleId) ?? "\(mainBundleId).packettunnel"
+  }
+
+  private var appGroupId: String {
+    configValue(for: AppConfigKey.appGroupId) ?? "group.\(mainBundleId)"
+  }
 
   func register(with controller: FlutterViewController) {
     if registeredController === controller {
@@ -211,6 +226,14 @@ final class MihomoIosPlugin {
   private func decryptKey(enc: [UInt8], key: UInt8) -> String {
     let bytes = enc.map { $0 ^ key }
     return String(bytes: bytes, encoding: .utf8) ?? ""
+  }
+
+  private func configValue(for key: String) -> String? {
+    guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String else {
+      return nil
+    }
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
   }
 
   private func resolveSharedWorkingDirectory() throws -> URL {

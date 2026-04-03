@@ -418,10 +418,11 @@
 /* Begin XCBuildConfiguration section */
 		DD4444444444444444444442 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = PacketTunnel/PacketTunnel.entitlements;
-				CODE_SIGN_STYLE = Manual;
-				DEVELOPMENT_TEAM = 2CS2A54XG8;
+				CODE_SIGN_STYLE = "$(IOS_CODE_SIGN_STYLE)";
+				DEVELOPMENT_TEAM = "$(IOS_DEVELOPMENT_TEAM)";
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = PacketTunnel/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
@@ -439,9 +440,9 @@
 					"$(inherited)",
 					"-ObjC",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.xiangyu.clash.packettunnel;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(IOS_PACKET_TUNNEL_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = Clash_Extension_Profile;
+				PROVISIONING_PROFILE_SPECIFIER = "$(IOS_EXTENSION_PROFILE_SPECIFIER)";
 				SKIP_INSTALL = YES;
 				MARKETING_VERSION = 1.0;
 				SWIFT_OBJC_BRIDGING_HEADER = "PacketTunnel/PacketTunnel-Bridging-Header.h";
@@ -456,10 +457,11 @@
 		};
 		DD4444444444444444444443 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = PacketTunnel/PacketTunnel.entitlements;
-				CODE_SIGN_STYLE = Manual;
-				DEVELOPMENT_TEAM = 2CS2A54XG8;
+				CODE_SIGN_STYLE = "$(IOS_CODE_SIGN_STYLE)";
+				DEVELOPMENT_TEAM = "$(IOS_DEVELOPMENT_TEAM)";
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = PacketTunnel/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
@@ -477,9 +479,9 @@
 					"$(inherited)",
 					"-ObjC",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.xiangyu.clash.packettunnel;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(IOS_PACKET_TUNNEL_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = Clash_Extension_Profile;
+				PROVISIONING_PROFILE_SPECIFIER = "$(IOS_EXTENSION_PROFILE_SPECIFIER)";
 				SKIP_INSTALL = YES;
 				MARKETING_VERSION = 1.0;
 				SWIFT_OBJC_BRIDGING_HEADER = "PacketTunnel/PacketTunnel-Bridging-Header.h";
@@ -493,10 +495,11 @@
 		};
 		DD4444444444444444444444 /* Profile */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = PacketTunnel/PacketTunnel.entitlements;
-				CODE_SIGN_STYLE = Manual;
-				DEVELOPMENT_TEAM = 2CS2A54XG8;
+				CODE_SIGN_STYLE = "$(IOS_CODE_SIGN_STYLE)";
+				DEVELOPMENT_TEAM = "$(IOS_DEVELOPMENT_TEAM)";
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = PacketTunnel/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
@@ -514,9 +517,9 @@
 					"$(inherited)",
 					"-ObjC",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.xiangyu.clash.packettunnel;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(IOS_PACKET_TUNNEL_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = Clash_Extension_Profile;
+				PROVISIONING_PROFILE_SPECIFIER = "$(IOS_EXTENSION_PROFILE_SPECIFIER)";
 				SKIP_INSTALL = YES;
 				MARKETING_VERSION = 1.0;
 				SWIFT_OBJC_BRIDGING_HEADER = "PacketTunnel/PacketTunnel-Bridging-Header.h";
@@ -587,9 +590,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = "$(IOS_CODE_SIGN_STYLE)";
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = 2CS2A54XG8;
+				DEVELOPMENT_TEAM = "$(IOS_DEVELOPMENT_TEAM)";
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
@@ -597,9 +600,9 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.xiangyu.clash;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(IOS_APP_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = Clash_Main_Profile;
+				PROVISIONING_PROFILE_SPECIFIER = "$(IOS_MAIN_PROFILE_SPECIFIER)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -771,9 +774,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = "$(IOS_CODE_SIGN_STYLE)";
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = 2CS2A54XG8;
+				DEVELOPMENT_TEAM = "$(IOS_DEVELOPMENT_TEAM)";
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
@@ -781,9 +784,9 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.xiangyu.clash;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(IOS_APP_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = Clash_Main_Profile;
+				PROVISIONING_PROFILE_SPECIFIER = "$(IOS_MAIN_PROFILE_SPECIFIER)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -798,9 +801,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = "$(IOS_CODE_SIGN_STYLE)";
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
-				DEVELOPMENT_TEAM = 2CS2A54XG8;
+				DEVELOPMENT_TEAM = "$(IOS_DEVELOPMENT_TEAM)";
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
@@ -808,9 +811,9 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.xiangyu.clash;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(IOS_APP_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = Clash_Main_Profile;
+				PROVISIONING_PROFILE_SPECIFIER = "$(IOS_MAIN_PROFILE_SPECIFIER)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";

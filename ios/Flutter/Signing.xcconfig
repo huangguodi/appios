@@ -1,0 +1,7 @@
+IOS_CODE_SIGN_STYLE=Manual
+IOS_DEVELOPMENT_TEAM=2CS2A54XG8
+IOS_APP_BUNDLE_ID=com.xiangyu.clash
+IOS_PACKET_TUNNEL_BUNDLE_ID=com.xiangyu.clash.packettunnel
+IOS_APP_GROUP_ID=group.com.xiangyu.clash
+IOS_MAIN_PROFILE_SPECIFIER=Clash_Main_Profile
+IOS_EXTENSION_PROFILE_SPECIFIER=Clash_Extension_Profile

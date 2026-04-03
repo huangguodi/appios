@@ -18,6 +18,10 @@
 	<string>加速器</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>IOSAppGroupIdentifier</key>
+	<string>$(IOS_APP_GROUP_ID)</string>
+	<key>IOSPacketTunnelBundleIdentifier</key>
+	<string>$(IOS_PACKET_TUNNEL_BUNDLE_ID)</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
