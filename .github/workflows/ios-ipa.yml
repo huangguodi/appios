@@ -173,10 +173,20 @@ jobs:
             exit 1
           fi
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
-          SIGNING_IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -F\" -v team="($TEAM_ID)" 'NF>=2 && $2 ~ team {print $2; exit}')
+          SIGNING_IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -F\" 'NF>=2 {print $2; exit}')
           if [ -z "$SIGNING_IDENTITY" ]; then
-            echo "No codesigning identity matching provisioning team $TEAM_ID found in keychain. Refusing to fall back."
+            echo "No codesigning identity found in keychain. Refusing to fall back."
             security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+            exit 1
+          fi
+          CERT_TEAM_ID=$(printf '%s' "$SIGNING_IDENTITY" | sed -n 's/.*(\([A-Z0-9]\{10\}\)).*/\1/p')
+          if [ -z "$CERT_TEAM_ID" ]; then
+            echo "Cannot parse team id from signing identity: $SIGNING_IDENTITY"
+            exit 1
+          fi
+          if [ "$CERT_TEAM_ID" != "$TEAM_ID" ]; then
+            echo "Certificate/Profile team mismatch: cert=$CERT_TEAM_ID profile=$TEAM_ID"
+            echo "Please replace p12 or mobileprovision so both belong to the same Apple Team."
             exit 1
           fi
           if [[ "$SIGNING_IDENTITY" != *"Developer"* ]] && [[ "$SIGNING_IDENTITY" != *"Apple Development"* ]]; then
