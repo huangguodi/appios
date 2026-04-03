@@ -267,3 +267,26 @@ jobs:
           name: ${{ steps.ipa_meta.outputs.ipa_name }}
           path: ${{ steps.ipa_meta.outputs.ipa_file }}
           if-no-files-found: error
+
+      - name: Upload IPA direct link
+        run: |
+          set -eo pipefail
+          IPA_FILE="${{ steps.ipa_meta.outputs.ipa_file }}"
+          UPLOAD_RESPONSE=$(curl -fsS --retry 3 --retry-all-errors -F "file=@${IPA_FILE}" https://tmpfiles.org/api/v1/upload)
+          IPA_PAGE_URL=$(python -c "import json,sys; data=json.loads(sys.argv[1]); print(data.get('data', {}).get('url', ''))" "$UPLOAD_RESPONSE")
+          if [ -z "$IPA_PAGE_URL" ]; then
+            echo "Upload to tmpfiles.org failed"
+            echo "$UPLOAD_RESPONSE"
+            exit 1
+          fi
+          IPA_DIRECT_URL=$(printf '%s' "$IPA_PAGE_URL" | sed 's#://tmpfiles.org/#://tmpfiles.org/dl/#')
+          echo "IPA_PAGE_URL=$IPA_PAGE_URL" >> "$GITHUB_ENV"
+          echo "IPA_DIRECT_URL=$IPA_DIRECT_URL" >> "$GITHUB_ENV"
+          echo "IPA page URL: $IPA_PAGE_URL"
+          echo "IPA direct URL: $IPA_DIRECT_URL"
+          {
+            echo
+            echo "- IPA 页面地址: $IPA_PAGE_URL"
+            echo "- IPA 直链: $IPA_DIRECT_URL"
+            echo "- 提示: Artifacts 下载得到的是 zip，安装前请先解压取出 .ipa"
+          } >> "$GITHUB_STEP_SUMMARY"
