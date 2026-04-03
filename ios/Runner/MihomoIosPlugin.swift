@@ -464,7 +464,7 @@ final class MihomoIosPlugin {
     }
   }
 
-  func sendProviderMessage(id: String, params: String, completion: @escaping (ProviderMessageResponse?) -> Void) {
+  fileprivate func sendProviderMessage(id: String, params: String, completion: @escaping (ProviderMessageResponse?) -> Void) {
     loadManager { manager in
       guard let session = manager?.connection as? NETunnelProviderSession else {
         completion(nil)
@@ -475,12 +475,16 @@ final class MihomoIosPlugin {
         completion(nil)
         return
       }
-      session.sendProviderMessage(data) { responseData in
-        guard let responseData else {
-          completion(nil)
-          return
+      do {
+        try session.sendProviderMessage(data) { responseData in
+          guard let responseData else {
+            completion(nil)
+            return
+          }
+          completion(try? JSONDecoder().decode(ProviderMessageResponse.self, from: responseData))
         }
-        completion(try? JSONDecoder().decode(ProviderMessageResponse.self, from: responseData))
+      } catch {
+        completion(nil)
       }
     }
   }
