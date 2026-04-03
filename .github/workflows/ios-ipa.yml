@@ -83,9 +83,37 @@ jobs:
           MAIN_PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" "$MAIN_PROFILE_PLIST")
           EXTENSION_PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" "$EXTENSION_PROFILE_PLIST")
           EXTENSION_PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" "$EXTENSION_PROFILE_PLIST")
+          TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" "$MAIN_PROFILE_PLIST")
+          MAIN_APP_IDENTIFIER=$(/usr/libexec/PlistBuddy -c "Print Entitlements:application-identifier" "$MAIN_PROFILE_PLIST")
+          EXT_APP_IDENTIFIER=$(/usr/libexec/PlistBuddy -c "Print Entitlements:application-identifier" "$EXTENSION_PROFILE_PLIST")
+          MAIN_APP_GROUP=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.security.application-groups:0" "$MAIN_PROFILE_PLIST")
+          EXT_APP_GROUP=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.security.application-groups:0" "$EXTENSION_PROFILE_PLIST")
+          if [[ "$MAIN_APP_IDENTIFIER" != "$TEAM_ID.$MAIN_BUNDLE_ID" ]]; then
+            echo "Main profile application-identifier mismatch: $MAIN_APP_IDENTIFIER"
+            exit 1
+          fi
+          if [[ "$EXT_APP_IDENTIFIER" != "$TEAM_ID.$EXTENSION_BUNDLE_ID" ]]; then
+            echo "Extension profile application-identifier mismatch: $EXT_APP_IDENTIFIER"
+            exit 1
+          fi
+          if [[ "$MAIN_APP_GROUP" != "$APP_GROUP_ID" ]]; then
+            echo "Main profile app group mismatch: $MAIN_APP_GROUP"
+            exit 1
+          fi
+          if [[ "$EXT_APP_GROUP" != "$APP_GROUP_ID" ]]; then
+            echo "Extension profile app group mismatch: $EXT_APP_GROUP"
+            exit 1
+          fi
+          if ! /usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.developer.networking.networkextension" "$MAIN_PROFILE_PLIST" | grep -q "packet-tunnel-provider"; then
+            echo "Main profile missing packet-tunnel-provider entitlement"
+            exit 1
+          fi
+          if ! /usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.developer.networking.networkextension" "$EXTENSION_PROFILE_PLIST" | grep -q "packet-tunnel-provider"; then
+            echo "Extension profile missing packet-tunnel-provider entitlement"
+            exit 1
+          fi
           cp "$MAIN_PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$MAIN_PROFILE_UUID.mobileprovision"
           cp "$EXTENSION_PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$EXTENSION_PROFILE_UUID.mobileprovision"
-          TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" "$MAIN_PROFILE_PLIST")
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
           SIGNING_IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -F\" 'NF>=2 {print $2; exit}')
           if [ -z "$SIGNING_IDENTITY" ]; then
@@ -135,6 +163,26 @@ jobs:
             -archivePath "$PWD/build/Runner.xcarchive" \
             -exportOptionsPlist "$EXPORT_PLIST" \
             -exportPath "$PWD/../build/ios/ipa"
+          APP_PATH="$PWD/build/Runner.xcarchive/Products/Applications/Runner.app"
+          EXT_PATH="$APP_PATH/PlugIns/PacketTunnel.appex"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Archived app not found: $APP_PATH"
+            exit 1
+          fi
+          if [ ! -d "$EXT_PATH" ]; then
+            echo "Archived extension not found: $EXT_PATH"
+            exit 1
+          fi
+          if [ ! -f "$APP_PATH/embedded.mobileprovision" ]; then
+            echo "Main app embedded.mobileprovision missing"
+            exit 1
+          fi
+          if [ ! -f "$EXT_PATH/embedded.mobileprovision" ]; then
+            echo "Extension embedded.mobileprovision missing"
+            exit 1
+          fi
+          codesign --verify --deep --strict "$APP_PATH"
+          codesign --verify --strict "$EXT_PATH"
           popd
 
       - name: Prepare IPA artifact
@@ -148,6 +196,10 @@ jobs:
           fi
           IPA_NAME=$(basename "$IPA_FILE")
           IPA_SHA256=$(shasum -a 256 "$IPA_FILE" | awk '{print $1}')
+          if ! unzip -l "$IPA_FILE" | grep -q "Payload/Runner.app/PlugIns/PacketTunnel.appex/"; then
+            echo "IPA does not contain PacketTunnel.appex"
+            exit 1
+          fi
           echo "ipa_file=$IPA_FILE" >> "$GITHUB_OUTPUT"
           echo "ipa_name=$IPA_NAME" >> "$GITHUB_OUTPUT"
           echo "ipa_sha256=$IPA_SHA256" >> "$GITHUB_OUTPUT"

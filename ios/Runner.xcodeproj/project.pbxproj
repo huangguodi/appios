@@ -31,6 +31,13 @@
 			remoteGlobalIDString = 97C146ED1CF9000F007C117D;
 			remoteInfo = Runner;
 		};
+		CC3333333333333333333335 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EE5555555555555555555551;
+			remoteInfo = PacketTunnel;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -237,6 +244,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				CC3333333333333333333336 /* PBXTargetDependency */,
 			);
 			name = Runner;
 			productName = Runner;
@@ -380,6 +388,11 @@
 			isa = PBXTargetDependency;
 			target = 97C146ED1CF9000F007C117D /* Runner */;
 			targetProxy = 331C8085294A63A400263BE5 /* PBXContainerItemProxy */;
+		};
+		CC3333333333333333333336 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EE5555555555555555555551 /* PacketTunnel */;
+			targetProxy = CC3333333333333333333335 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
