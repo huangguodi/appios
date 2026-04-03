@@ -627,25 +627,21 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   }
 
   private func activePhysicalInterfaceIndex() -> UInt32? {
-    guard let path = defaultPath else {
+    let interfaces = activeInterfaceNames()
+    guard !interfaces.isEmpty else {
       return nil
     }
-    let interfaces = activeInterfaceNames()
-    if path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet) {
-      if let index = resolveInterfaceIndex(
-        from: interfaces,
-        matchingPrefixes: ["en"]
-      ) {
-        return index
-      }
+    if let index = resolveInterfaceIndex(
+      from: interfaces,
+      matchingPrefixes: ["en"]
+    ) {
+      return index
     }
-    if path.usesInterfaceType(.cellular) {
-      if let index = resolveInterfaceIndex(
-        from: interfaces,
-        matchingPrefixes: ["pdp_ip", "pdp-ip"]
-      ) {
-        return index
-      }
+    if let index = resolveInterfaceIndex(
+      from: interfaces,
+      matchingPrefixes: ["pdp_ip", "pdp-ip"]
+    ) {
+      return index
     }
     if let index = resolveInterfaceIndex(
       from: interfaces,
