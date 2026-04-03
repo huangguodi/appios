@@ -64,12 +64,7 @@ jobs:
           security create-keychain -p "" "$KEYCHAIN_PATH"
           security set-keychain-settings "$KEYCHAIN_PATH"
           security unlock-keychain -p "" "$KEYCHAIN_PATH"
-          if ! security import "$CERT_PATH" -P "$IOS_P12_PASSWORD_CLEAN" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"; then
-            openssl pkcs12 -in "$CERT_PATH" -passin "pass:$IOS_P12_PASSWORD_CLEAN" -clcerts -nokeys -out "$RUNNER_TEMP/cert.pem"
-            openssl pkcs12 -in "$CERT_PATH" -passin "pass:$IOS_P12_PASSWORD_CLEAN" -nocerts -nodes -out "$RUNNER_TEMP/key.pem"
-            security import "$RUNNER_TEMP/cert.pem" -A -k "$KEYCHAIN_PATH"
-            security import "$RUNNER_TEMP/key.pem" -A -k "$KEYCHAIN_PATH"
-          fi
+          security import "$CERT_PATH" -P "$IOS_P12_PASSWORD_CLEAN" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -k "" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH"
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
@@ -141,25 +136,23 @@ jobs:
             exit 1
           fi
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          SIGNING_IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -F\" 'NF>=2{print $2; exit}')
+          if [ -z "$SIGNING_IDENTITY" ]; then
+            echo "No codesigning identity found in keychain. Refusing to fall back."
+            exit 1
+          fi
+          if [[ "$SIGNING_IDENTITY" != *"Developer"* ]] && [[ "$SIGNING_IDENTITY" != *"Apple Development"* ]]; then
+            echo "Unexpected signing identity: $SIGNING_IDENTITY. Refusing to fall back."
+            exit 1
+          fi
           /usr/libexec/PlistBuddy -c "Print Entitlements" "$MAIN_PROFILE_PLIST"
           /usr/libexec/PlistBuddy -c "Print Entitlements" "$EXTENSION_PROFILE_PLIST"
+          EXPORT_METHOD="development"
+          EXPORT_SIGNING_CERT="Apple Development"
           GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$MAIN_PROFILE_PLIST")
-          HAS_PROVISIONED_DEVICES="false"
-          if /usr/libexec/PlistBuddy -c "Print ProvisionedDevices:0" "$MAIN_PROFILE_PLIST" >/dev/null 2>&1; then
-            HAS_PROVISIONED_DEVICES="true"
-          fi
-          PROVISIONS_ALL_DEVICES=$(/usr/libexec/PlistBuddy -c "Print ProvisionsAllDevices" "$MAIN_PROFILE_PLIST" 2>/dev/null || echo "false")
-          EXPORT_METHOD="app-store"
-          if [ "$GET_TASK_ALLOW" = "true" ]; then
-            EXPORT_METHOD="development"
-          elif [ "$PROVISIONS_ALL_DEVICES" = "true" ]; then
-            EXPORT_METHOD="enterprise"
-          elif [ "$HAS_PROVISIONED_DEVICES" = "true" ]; then
-            EXPORT_METHOD="ad-hoc"
-          fi
-          EXPORT_SIGNING_CERT="Apple Distribution"
-          if [ "$EXPORT_METHOD" = "development" ]; then
-            EXPORT_SIGNING_CERT="Apple Development"
+          if [ "$GET_TASK_ALLOW" != "true" ]; then
+            echo "Provisioning profile is not a development profile (get-task-allow != true). Refusing to fall back."
+            exit 1
           fi
           echo "Resolved signing context: team=$TEAM_ID export_method=$EXPORT_METHOD main_profile=$MAIN_PROFILE_NAME($MAIN_PROFILE_UUID) extension_profile=$EXTENSION_PROFILE_NAME($EXTENSION_PROFILE_UUID)"
           EXPORT_PLIST="$RUNNER_TEMP/ExportOptions.plist"
@@ -178,10 +171,15 @@ jobs:
             -archivePath "$PWD/build/Runner.xcarchive" archive \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CODE_SIGN_STYLE=Manual \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
             "Runner:DEVELOPMENT_TEAM=$TEAM_ID" \
             "PacketTunnel:DEVELOPMENT_TEAM=$TEAM_ID" \
             "Runner:CODE_SIGN_STYLE=Manual" \
             "PacketTunnel:CODE_SIGN_STYLE=Manual" \
+            "Runner:CODE_SIGN_IDENTITY=$SIGNING_IDENTITY" \
+            "PacketTunnel:CODE_SIGN_IDENTITY=$SIGNING_IDENTITY" \
             "Runner:PRODUCT_BUNDLE_IDENTIFIER=$MAIN_BUNDLE_ID" \
             "PacketTunnel:PRODUCT_BUNDLE_IDENTIFIER=$EXTENSION_BUNDLE_ID" \
             "Runner:PROVISIONING_PROFILE=$MAIN_PROFILE_UUID" \
