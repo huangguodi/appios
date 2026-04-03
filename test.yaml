@@ -1,0 +1,603 @@
+allow-lan: true
+bind-address: '*'
+dns:
+  default-nameserver:
+  - 223.5.5.5
+  - 119.29.29.29
+  enable: true
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  fallback:
+  - https://doh-pure.onedns.net/dns-query
+  - https://ada.openbld.net/dns-query
+  - https://223.5.5.5/dns-query
+  - https://223.6.6.6/dns-query
+  fallback-filter:
+    geoip: false
+    ipcidr:
+    - 240.0.0.0/4
+    - 0.0.0.0/32
+  ipv6: false
+  nameserver:
+  - https://doh.pub/dns-query
+  - https://dns.alidns.com/dns-query
+  proxy-server-nameserver:
+  - 223.5.5.5
+  - 119.29.29.29
+  use-hosts: true
+log-level: debug
+mixed-port: 7890
+mode: rule
+proxies:
+- alterId: 0
+  cipher: auto
+  name: 香港高速1
+  network: ws
+  port: 443
+  server: api1.vpnapis.com
+  skip-cert-verify: true
+  tls: true
+  type: vmess
+  udp: true
+  uuid: d5adf62c-3159-414b-8c5f-bcda6d5dadab
+  ws-opts:
+    headers:
+      Host: api1.vpnapis.com
+    path: /da2a05784645643a57e58e1fa9b96ed9
+- alterId: 0
+  cipher: auto
+  name: 香港高速2
+  network: ws
+  port: 443
+  server: api2.vpnapis.com
+  skip-cert-verify: true
+  tls: true
+  type: vmess
+  udp: true
+  uuid: d5adf62c-3159-414b-8c5f-bcda6d5dadab
+  ws-opts:
+    headers:
+      Host: api2.vpnapis.com
+    path: /39e5140c35f472aa880d4b589b9749db
+- alterId: 0
+  cipher: auto
+  name: 高速节点3
+  network: ws
+  port: 443
+  server: api3.vpnapis.com
+  skip-cert-verify: true
+  tls: true
+  type: vmess
+  udp: true
+  uuid: d5adf62c-3159-414b-8c5f-bcda6d5dadab
+  ws-opts:
+    headers:
+      Host: api3.vpnapis.com
+    path: /0bacd16046b5d068f85a6ee94a322781
+proxy-groups:
+- name: SMVPN
+  proxies:
+  - 自动选择
+  type: select
+- interval: 300
+  name: 自动选择
+  proxies:
+  - 香港高速1
+  - 香港高速2
+  - 高速节点3
+  type: url-test
+  url: http://www.gstatic.com/generate_204
+rules:
+- DOMAIN-SUFFIX,services.googleapis.cn,SMVPN
+- DOMAIN-SUFFIX,vpnapis.com,DIRECT
+- DOMAIN,safebrowsing.urlsec.qq.com,DIRECT
+- DOMAIN,safebrowsing.googleapis.com,DIRECT
+- DOMAIN,developer.apple.com,SMVPN
+- DOMAIN-SUFFIX,digicert.com,SMVPN
+- DOMAIN,ocsp.apple.com,SMVPN
+- DOMAIN,ocsp.comodoca.com,SMVPN
+- DOMAIN,ocsp.usertrust.com,SMVPN
+- DOMAIN,ocsp.sectigo.com,SMVPN
+- DOMAIN,ocsp.verisign.net,SMVPN
+- DOMAIN-SUFFIX,apple-dns.net,SMVPN
+- DOMAIN,testflight.apple.com,SMVPN
+- DOMAIN,sandbox.itunes.apple.com,SMVPN
+- DOMAIN,itunes.apple.com,SMVPN
+- DOMAIN-SUFFIX,apps.apple.com,SMVPN
+- DOMAIN-SUFFIX,blobstore.apple.com,SMVPN
+- DOMAIN,cvws.icloud-content.com,SMVPN
+- DOMAIN-SUFFIX,mzstatic.com,DIRECT
+- DOMAIN-SUFFIX,itunes.apple.com,DIRECT
+- DOMAIN-SUFFIX,icloud.com,DIRECT
+- DOMAIN-SUFFIX,icloud-content.com,DIRECT
+- DOMAIN-SUFFIX,me.com,DIRECT
+- DOMAIN-SUFFIX,aaplimg.com,DIRECT
+- DOMAIN-SUFFIX,cdn20.com,DIRECT
+- DOMAIN-SUFFIX,cdn-apple.com,DIRECT
+- DOMAIN-SUFFIX,akadns.net,DIRECT
+- DOMAIN-SUFFIX,akamaiedge.net,DIRECT
+- DOMAIN-SUFFIX,edgekey.net,DIRECT
+- DOMAIN-SUFFIX,mwcloudcdn.com,DIRECT
+- DOMAIN-SUFFIX,mwcname.com,DIRECT
+- DOMAIN-SUFFIX,apple.com,DIRECT
+- DOMAIN-SUFFIX,apple-cloudkit.com,DIRECT
+- DOMAIN-SUFFIX,apple-mapkit.com,DIRECT
+- DOMAIN-SUFFIX,126.com,DIRECT
+- DOMAIN-SUFFIX,126.net,DIRECT
+- DOMAIN-SUFFIX,127.net,DIRECT
+- DOMAIN-SUFFIX,163.com,DIRECT
+- DOMAIN-SUFFIX,360buyimg.com,DIRECT
+- DOMAIN-SUFFIX,36kr.com,DIRECT
+- DOMAIN-SUFFIX,acfun.tv,DIRECT
+- DOMAIN-SUFFIX,air-matters.com,DIRECT
+- DOMAIN-SUFFIX,aixifan.com,DIRECT
+- DOMAIN-KEYWORD,alicdn,DIRECT
+- DOMAIN-KEYWORD,alipay,DIRECT
+- DOMAIN-KEYWORD,taobao,DIRECT
+- DOMAIN-SUFFIX,amap.com,DIRECT
+- DOMAIN-SUFFIX,autonavi.com,DIRECT
+- DOMAIN-KEYWORD,baidu,DIRECT
+- DOMAIN-SUFFIX,bdimg.com,DIRECT
+- DOMAIN-SUFFIX,bdstatic.com,DIRECT
+- DOMAIN-SUFFIX,bilibili.com,DIRECT
+- DOMAIN-SUFFIX,bilivideo.com,DIRECT
+- DOMAIN-SUFFIX,caiyunapp.com,DIRECT
+- DOMAIN-SUFFIX,clouddn.com,DIRECT
+- DOMAIN-SUFFIX,cnbeta.com,DIRECT
+- DOMAIN-SUFFIX,cnbetacdn.com,DIRECT
+- DOMAIN-SUFFIX,cootekservice.com,DIRECT
+- DOMAIN-SUFFIX,csdn.net,DIRECT
+- DOMAIN-SUFFIX,ctrip.com,DIRECT
+- DOMAIN-SUFFIX,dgtle.com,DIRECT
+- DOMAIN-SUFFIX,dianping.com,DIRECT
+- DOMAIN-SUFFIX,douban.com,DIRECT
+- DOMAIN-SUFFIX,doubanio.com,DIRECT
+- DOMAIN-SUFFIX,duokan.com,DIRECT
+- DOMAIN-SUFFIX,easou.com,DIRECT
+- DOMAIN-SUFFIX,ele.me,DIRECT
+- DOMAIN-SUFFIX,feng.com,DIRECT
+- DOMAIN-SUFFIX,fir.im,DIRECT
+- DOMAIN-SUFFIX,frdic.com,DIRECT
+- DOMAIN-SUFFIX,g-cores.com,DIRECT
+- DOMAIN-SUFFIX,godic.net,DIRECT
+- DOMAIN-SUFFIX,gtimg.com,DIRECT
+- DOMAIN,cdn.hockeyapp.net,DIRECT
+- DOMAIN-SUFFIX,hongxiu.com,DIRECT
+- DOMAIN-SUFFIX,hxcdn.net,DIRECT
+- DOMAIN-SUFFIX,iciba.com,DIRECT
+- DOMAIN-SUFFIX,ifeng.com,DIRECT
+- DOMAIN-SUFFIX,ifengimg.com,DIRECT
+- DOMAIN-SUFFIX,ipip.net,DIRECT
+- DOMAIN-SUFFIX,iqiyi.com,DIRECT
+- DOMAIN-SUFFIX,jd.com,DIRECT
+- DOMAIN-SUFFIX,jianshu.com,DIRECT
+- DOMAIN-SUFFIX,knewone.com,DIRECT
+- DOMAIN-SUFFIX,le.com,DIRECT
+- DOMAIN-SUFFIX,lecloud.com,DIRECT
+- DOMAIN-SUFFIX,lemicp.com,DIRECT
+- DOMAIN-SUFFIX,licdn.com,DIRECT
+- DOMAIN-SUFFIX,luoo.net,DIRECT
+- DOMAIN-SUFFIX,meituan.com,DIRECT
+- DOMAIN-SUFFIX,meituan.net,DIRECT
+- DOMAIN-SUFFIX,mi.com,DIRECT
+- DOMAIN-SUFFIX,miaopai.com,DIRECT
+- DOMAIN-SUFFIX,microsoft.com,DIRECT
+- DOMAIN-SUFFIX,microsoftonline.com,DIRECT
+- DOMAIN-SUFFIX,miui.com,DIRECT
+- DOMAIN-SUFFIX,miwifi.com,DIRECT
+- DOMAIN-SUFFIX,mob.com,DIRECT
+- DOMAIN-SUFFIX,netease.com,DIRECT
+- DOMAIN-SUFFIX,office.com,DIRECT
+- DOMAIN-SUFFIX,office365.com,DIRECT
+- DOMAIN-KEYWORD,officecdn,DIRECT
+- DOMAIN-SUFFIX,oschina.net,DIRECT
+- DOMAIN-SUFFIX,ppsimg.com,DIRECT
+- DOMAIN-SUFFIX,pstatp.com,DIRECT
+- DOMAIN-SUFFIX,qcloud.com,DIRECT
+- DOMAIN-SUFFIX,qdaily.com,DIRECT
+- DOMAIN-SUFFIX,qdmm.com,DIRECT
+- DOMAIN-SUFFIX,qhimg.com,DIRECT
+- DOMAIN-SUFFIX,qhres.com,DIRECT
+- DOMAIN-SUFFIX,qidian.com,DIRECT
+- DOMAIN-SUFFIX,qihucdn.com,DIRECT
+- DOMAIN-SUFFIX,qiniu.com,DIRECT
+- DOMAIN-SUFFIX,qiniucdn.com,DIRECT
+- DOMAIN-SUFFIX,qiyipic.com,DIRECT
+- DOMAIN-SUFFIX,qq.com,DIRECT
+- DOMAIN-SUFFIX,qqurl.com,DIRECT
+- DOMAIN-SUFFIX,rarbg.to,DIRECT
+- DOMAIN-SUFFIX,ruguoapp.com,DIRECT
+- DOMAIN-SUFFIX,segmentfault.com,DIRECT
+- DOMAIN-SUFFIX,sinaapp.com,DIRECT
+- DOMAIN-SUFFIX,smzdm.com,DIRECT
+- DOMAIN-SUFFIX,snapdrop.net,DIRECT
+- DOMAIN-SUFFIX,sogou.com,DIRECT
+- DOMAIN-SUFFIX,sogoucdn.com,DIRECT
+- DOMAIN-SUFFIX,sohu.com,DIRECT
+- DOMAIN-SUFFIX,soku.com,DIRECT
+- DOMAIN-SUFFIX,speedtest.net,DIRECT
+- DOMAIN-SUFFIX,sspai.com,DIRECT
+- DOMAIN-SUFFIX,suning.com,DIRECT
+- DOMAIN-SUFFIX,taobao.com,DIRECT
+- DOMAIN-SUFFIX,tencent.com,DIRECT
+- DOMAIN-SUFFIX,tenpay.com,DIRECT
+- DOMAIN-SUFFIX,tianyancha.com,DIRECT
+- DOMAIN-SUFFIX,tmall.com,DIRECT
+- DOMAIN-SUFFIX,tudou.com,DIRECT
+- DOMAIN-SUFFIX,umetrip.com,DIRECT
+- DOMAIN-SUFFIX,upaiyun.com,DIRECT
+- DOMAIN-SUFFIX,upyun.com,DIRECT
+- DOMAIN-SUFFIX,veryzhun.com,DIRECT
+- DOMAIN-SUFFIX,weather.com,DIRECT
+- DOMAIN-SUFFIX,weibo.com,DIRECT
+- DOMAIN-SUFFIX,xiami.com,DIRECT
+- DOMAIN-SUFFIX,xiami.net,DIRECT
+- DOMAIN-SUFFIX,xiaomicp.com,DIRECT
+- DOMAIN-SUFFIX,ximalaya.com,DIRECT
+- DOMAIN-SUFFIX,xmcdn.com,DIRECT
+- DOMAIN-SUFFIX,xunlei.com,DIRECT
+- DOMAIN-SUFFIX,yhd.com,DIRECT
+- DOMAIN-SUFFIX,yihaodianimg.com,DIRECT
+- DOMAIN-SUFFIX,yinxiang.com,DIRECT
+- DOMAIN-SUFFIX,ykimg.com,DIRECT
+- DOMAIN-SUFFIX,youdao.com,DIRECT
+- DOMAIN-SUFFIX,youku.com,DIRECT
+- DOMAIN-SUFFIX,zealer.com,DIRECT
+- DOMAIN-SUFFIX,zhihu.com,DIRECT
+- DOMAIN-SUFFIX,zhimg.com,DIRECT
+- DOMAIN-SUFFIX,zimuzu.tv,DIRECT
+- DOMAIN-SUFFIX,zoho.com,DIRECT
+- DOMAIN-KEYWORD,amazon,SMVPN
+- DOMAIN-KEYWORD,google,SMVPN
+- DOMAIN-KEYWORD,gmail,SMVPN
+- DOMAIN-KEYWORD,youtube,SMVPN
+- DOMAIN-KEYWORD,facebook,SMVPN
+- DOMAIN-SUFFIX,fb.me,SMVPN
+- DOMAIN-SUFFIX,fbcdn.net,SMVPN
+- DOMAIN-KEYWORD,twitter,SMVPN
+- DOMAIN-KEYWORD,instagram,SMVPN
+- DOMAIN-KEYWORD,dropbox,SMVPN
+- DOMAIN-SUFFIX,twimg.com,SMVPN
+- DOMAIN-KEYWORD,blogspot,SMVPN
+- DOMAIN-SUFFIX,youtu.be,SMVPN
+- DOMAIN-KEYWORD,whatsapp,SMVPN
+- DOMAIN-KEYWORD,admarvel,REJECT
+- DOMAIN-KEYWORD,admaster,REJECT
+- DOMAIN-KEYWORD,adsage,REJECT
+- DOMAIN-KEYWORD,adsmogo,REJECT
+- DOMAIN-KEYWORD,adsrvmedia,REJECT
+- DOMAIN-KEYWORD,adwords,REJECT
+- DOMAIN-KEYWORD,adservice,REJECT
+- DOMAIN-SUFFIX,appsflyer.com,REJECT
+- DOMAIN-KEYWORD,domob,REJECT
+- DOMAIN-SUFFIX,doubleclick.net,REJECT
+- DOMAIN-KEYWORD,duomeng,REJECT
+- DOMAIN-KEYWORD,dwtrack,REJECT
+- DOMAIN-KEYWORD,guanggao,REJECT
+- DOMAIN-KEYWORD,lianmeng,REJECT
+- DOMAIN-SUFFIX,mmstat.com,REJECT
+- DOMAIN-KEYWORD,mopub,REJECT
+- DOMAIN-KEYWORD,omgmta,REJECT
+- DOMAIN-KEYWORD,openx,REJECT
+- DOMAIN-KEYWORD,partnerad,REJECT
+- DOMAIN-KEYWORD,pingfore,REJECT
+- DOMAIN-KEYWORD,supersonicads,REJECT
+- DOMAIN-KEYWORD,uedas,REJECT
+- DOMAIN-KEYWORD,umeng,REJECT
+- DOMAIN-KEYWORD,usage,REJECT
+- DOMAIN-SUFFIX,vungle.com,REJECT
+- DOMAIN-KEYWORD,wlmonitor,REJECT
+- DOMAIN-KEYWORD,zjtoolbar,REJECT
+- DOMAIN-SUFFIX,9to5mac.com,SMVPN
+- DOMAIN-SUFFIX,abpchina.org,SMVPN
+- DOMAIN-SUFFIX,adblockplus.org,SMVPN
+- DOMAIN-SUFFIX,adobe.com,SMVPN
+- DOMAIN-SUFFIX,akamaized.net,SMVPN
+- DOMAIN-SUFFIX,alfredapp.com,SMVPN
+- DOMAIN-SUFFIX,amplitude.com,SMVPN
+- DOMAIN-SUFFIX,ampproject.org,SMVPN
+- DOMAIN-SUFFIX,android.com,SMVPN
+- DOMAIN-SUFFIX,angularjs.org,SMVPN
+- DOMAIN-SUFFIX,aolcdn.com,SMVPN
+- DOMAIN-SUFFIX,apkpure.com,SMVPN
+- DOMAIN-SUFFIX,appledaily.com,SMVPN
+- DOMAIN-SUFFIX,appshopper.com,SMVPN
+- DOMAIN-SUFFIX,appspot.com,SMVPN
+- DOMAIN-SUFFIX,arcgis.com,SMVPN
+- DOMAIN-SUFFIX,archive.org,SMVPN
+- DOMAIN-SUFFIX,armorgames.com,SMVPN
+- DOMAIN-SUFFIX,aspnetcdn.com,SMVPN
+- DOMAIN-SUFFIX,att.com,SMVPN
+- DOMAIN-SUFFIX,awsstatic.com,SMVPN
+- DOMAIN-SUFFIX,azureedge.net,SMVPN
+- DOMAIN-SUFFIX,azurewebsites.net,SMVPN
+- DOMAIN-SUFFIX,bing.com,SMVPN
+- DOMAIN-SUFFIX,bintray.com,SMVPN
+- DOMAIN-SUFFIX,bit.com,SMVPN
+- DOMAIN-SUFFIX,bit.ly,SMVPN
+- DOMAIN-SUFFIX,bitbucket.org,SMVPN
+- DOMAIN-SUFFIX,bjango.com,SMVPN
+- DOMAIN-SUFFIX,bkrtx.com,SMVPN
+- DOMAIN-SUFFIX,blog.com,SMVPN
+- DOMAIN-SUFFIX,blogcdn.com,SMVPN
+- DOMAIN-SUFFIX,blogger.com,SMVPN
+- DOMAIN-SUFFIX,blogsmithmedia.com,SMVPN
+- DOMAIN-SUFFIX,blogspot.com,SMVPN
+- DOMAIN-SUFFIX,blogspot.hk,SMVPN
+- DOMAIN-SUFFIX,bloomberg.com,SMVPN
+- DOMAIN-SUFFIX,box.com,SMVPN
+- DOMAIN-SUFFIX,box.net,SMVPN
+- DOMAIN-SUFFIX,cachefly.net,SMVPN
+- DOMAIN-SUFFIX,chromium.org,SMVPN
+- DOMAIN-SUFFIX,cl.ly,SMVPN
+- DOMAIN-SUFFIX,cloudflare.com,SMVPN
+- DOMAIN-SUFFIX,cloudfront.net,SMVPN
+- DOMAIN-SUFFIX,cloudmagic.com,SMVPN
+- DOMAIN-SUFFIX,cmail19.com,SMVPN
+- DOMAIN-SUFFIX,cnet.com,SMVPN
+- DOMAIN-SUFFIX,cocoapods.org,SMVPN
+- DOMAIN-SUFFIX,comodoca.com,SMVPN
+- DOMAIN-SUFFIX,crashlytics.com,SMVPN
+- DOMAIN-SUFFIX,culturedcode.com,SMVPN
+- DOMAIN-SUFFIX,d.pr,SMVPN
+- DOMAIN-SUFFIX,danilo.to,SMVPN
+- DOMAIN-SUFFIX,dayone.me,SMVPN
+- DOMAIN-SUFFIX,db.tt,SMVPN
+- DOMAIN-SUFFIX,deskconnect.com,SMVPN
+- DOMAIN-SUFFIX,disq.us,SMVPN
+- DOMAIN-SUFFIX,disqus.com,SMVPN
+- DOMAIN-SUFFIX,disquscdn.com,SMVPN
+- DOMAIN-SUFFIX,dnsimple.com,SMVPN
+- DOMAIN-SUFFIX,docker.com,SMVPN
+- DOMAIN-SUFFIX,dribbble.com,SMVPN
+- DOMAIN-SUFFIX,droplr.com,SMVPN
+- DOMAIN-SUFFIX,duckduckgo.com,SMVPN
+- DOMAIN-SUFFIX,dueapp.com,SMVPN
+- DOMAIN-SUFFIX,dytt8.net,SMVPN
+- DOMAIN-SUFFIX,edgecastcdn.net,SMVPN
+- DOMAIN-SUFFIX,edgekey.net,SMVPN
+- DOMAIN-SUFFIX,edgesuite.net,SMVPN
+- DOMAIN-SUFFIX,engadget.com,SMVPN
+- DOMAIN-SUFFIX,entrust.net,SMVPN
+- DOMAIN-SUFFIX,eurekavpt.com,SMVPN
+- DOMAIN-SUFFIX,evernote.com,SMVPN
+- DOMAIN-SUFFIX,fabric.io,SMVPN
+- DOMAIN-SUFFIX,fast.com,SMVPN
+- DOMAIN-SUFFIX,fastly.net,SMVPN
+- DOMAIN-SUFFIX,fc2.com,SMVPN
+- DOMAIN-SUFFIX,feedburner.com,SMVPN
+- DOMAIN-SUFFIX,feedly.com,SMVPN
+- DOMAIN-SUFFIX,feedsportal.com,SMVPN
+- DOMAIN-SUFFIX,fiftythree.com,SMVPN
+- DOMAIN-SUFFIX,firebaseio.com,SMVPN
+- DOMAIN-SUFFIX,flexibits.com,SMVPN
+- DOMAIN-SUFFIX,flickr.com,SMVPN
+- DOMAIN-SUFFIX,flipboard.com,SMVPN
+- DOMAIN-SUFFIX,g.co,SMVPN
+- DOMAIN-SUFFIX,gabia.net,SMVPN
+- DOMAIN-SUFFIX,geni.us,SMVPN
+- DOMAIN-SUFFIX,gfx.ms,SMVPN
+- DOMAIN-SUFFIX,ggpht.com,SMVPN
+- DOMAIN-SUFFIX,ghostnoteapp.com,SMVPN
+- DOMAIN-SUFFIX,git.io,SMVPN
+- DOMAIN-KEYWORD,github,SMVPN
+- DOMAIN-SUFFIX,globalsign.com,SMVPN
+- DOMAIN-SUFFIX,gmodules.com,SMVPN
+- DOMAIN-SUFFIX,godaddy.com,SMVPN
+- DOMAIN-SUFFIX,golang.org,SMVPN
+- DOMAIN-SUFFIX,gongm.in,SMVPN
+- DOMAIN-SUFFIX,goo.gl,SMVPN
+- DOMAIN-SUFFIX,goodreaders.com,SMVPN
+- DOMAIN-SUFFIX,goodreads.com,SMVPN
+- DOMAIN-SUFFIX,gravatar.com,SMVPN
+- DOMAIN-SUFFIX,gstatic.com,SMVPN
+- DOMAIN-SUFFIX,gvt0.com,SMVPN
+- DOMAIN-SUFFIX,hockeyapp.net,SMVPN
+- DOMAIN-SUFFIX,hotmail.com,SMVPN
+- DOMAIN-SUFFIX,icons8.com,SMVPN
+- DOMAIN-SUFFIX,ifixit.com,SMVPN
+- DOMAIN-SUFFIX,ift.tt,SMVPN
+- DOMAIN-SUFFIX,ifttt.com,SMVPN
+- DOMAIN-SUFFIX,iherb.com,SMVPN
+- DOMAIN-SUFFIX,imageshack.us,SMVPN
+- DOMAIN-SUFFIX,img.ly,SMVPN
+- DOMAIN-SUFFIX,imgur.com,SMVPN
+- DOMAIN-SUFFIX,imore.com,SMVPN
+- DOMAIN-SUFFIX,instapaper.com,SMVPN
+- DOMAIN-SUFFIX,ipn.li,SMVPN
+- DOMAIN-SUFFIX,is.gd,SMVPN
+- DOMAIN-SUFFIX,issuu.com,SMVPN
+- DOMAIN-SUFFIX,itgonglun.com,SMVPN
+- DOMAIN-SUFFIX,itun.es,SMVPN
+- DOMAIN-SUFFIX,ixquick.com,SMVPN
+- DOMAIN-SUFFIX,j.mp,SMVPN
+- DOMAIN-SUFFIX,js.revsci.net,SMVPN
+- DOMAIN-SUFFIX,jshint.com,SMVPN
+- DOMAIN-SUFFIX,jtvnw.net,SMVPN
+- DOMAIN-SUFFIX,justgetflux.com,SMVPN
+- DOMAIN-SUFFIX,kat.cr,SMVPN
+- DOMAIN-SUFFIX,klip.me,SMVPN
+- DOMAIN-SUFFIX,libsyn.com,SMVPN
+- DOMAIN-SUFFIX,linkedin.com,SMVPN
+- DOMAIN-SUFFIX,line-apps.com,SMVPN
+- DOMAIN-SUFFIX,linode.com,SMVPN
+- DOMAIN-SUFFIX,lithium.com,SMVPN
+- DOMAIN-SUFFIX,littlehj.com,SMVPN
+- DOMAIN-SUFFIX,live.com,SMVPN
+- DOMAIN-SUFFIX,live.net,SMVPN
+- DOMAIN-SUFFIX,livefilestore.com,SMVPN
+- DOMAIN-SUFFIX,llnwd.net,SMVPN
+- DOMAIN-SUFFIX,macid.co,SMVPN
+- DOMAIN-SUFFIX,macromedia.com,SMVPN
+- DOMAIN-SUFFIX,macrumors.com,SMVPN
+- DOMAIN-SUFFIX,mashable.com,SMVPN
+- DOMAIN-SUFFIX,mathjax.org,SMVPN
+- DOMAIN-SUFFIX,medium.com,SMVPN
+- DOMAIN-SUFFIX,mega.co.nz,SMVPN
+- DOMAIN-SUFFIX,mega.nz,SMVPN
+- DOMAIN-SUFFIX,megaupload.com,SMVPN
+- DOMAIN-SUFFIX,microsofttranslator.com,SMVPN
+- DOMAIN-SUFFIX,mindnode.com,SMVPN
+- DOMAIN-SUFFIX,mobile01.com,SMVPN
+- DOMAIN-SUFFIX,modmyi.com,SMVPN
+- DOMAIN-SUFFIX,msedge.net,SMVPN
+- DOMAIN-SUFFIX,myfontastic.com,SMVPN
+- DOMAIN-SUFFIX,name.com,SMVPN
+- DOMAIN-SUFFIX,nextmedia.com,SMVPN
+- DOMAIN-SUFFIX,nsstatic.net,SMVPN
+- DOMAIN-SUFFIX,nssurge.com,SMVPN
+- DOMAIN-SUFFIX,nyt.com,SMVPN
+- DOMAIN-SUFFIX,nytimes.com,SMVPN
+- DOMAIN-SUFFIX,omnigroup.com,SMVPN
+- DOMAIN-SUFFIX,onedrive.com,SMVPN
+- DOMAIN-SUFFIX,onenote.com,SMVPN
+- DOMAIN-SUFFIX,ooyala.com,SMVPN
+- DOMAIN-SUFFIX,openvpn.net,SMVPN
+- DOMAIN-SUFFIX,openwrt.org,SMVPN
+- DOMAIN-SUFFIX,orkut.com,SMVPN
+- DOMAIN-SUFFIX,osxdaily.com,SMVPN
+- DOMAIN-SUFFIX,outlook.com,SMVPN
+- DOMAIN-SUFFIX,ow.ly,SMVPN
+- DOMAIN-SUFFIX,paddleapi.com,SMVPN
+- DOMAIN-SUFFIX,parallels.com,SMVPN
+- DOMAIN-SUFFIX,parse.com,SMVPN
+- DOMAIN-SUFFIX,pdfexpert.com,SMVPN
+- DOMAIN-SUFFIX,periscope.tv,SMVPN
+- DOMAIN-SUFFIX,pinboard.in,SMVPN
+- DOMAIN-SUFFIX,pinterest.com,SMVPN
+- DOMAIN-SUFFIX,pixelmator.com,SMVPN
+- DOMAIN-SUFFIX,pixiv.net,SMVPN
+- DOMAIN-SUFFIX,playpcesor.com,SMVPN
+- DOMAIN-SUFFIX,playstation.com,SMVPN
+- DOMAIN-SUFFIX,playstation.com.hk,SMVPN
+- DOMAIN-SUFFIX,playstation.net,SMVPN
+- DOMAIN-SUFFIX,playstationnetwork.com,SMVPN
+- DOMAIN-SUFFIX,pushwoosh.com,SMVPN
+- DOMAIN-SUFFIX,rime.im,SMVPN
+- DOMAIN-SUFFIX,servebom.com,SMVPN
+- DOMAIN-SUFFIX,sfx.ms,SMVPN
+- DOMAIN-SUFFIX,shadowsocks.org,SMVPN
+- DOMAIN-SUFFIX,sharethis.com,SMVPN
+- DOMAIN-SUFFIX,shazam.com,SMVPN
+- DOMAIN-SUFFIX,skype.com,SMVPN
+- DOMAIN-SUFFIX,smartdnsXBoard.com,SMVPN
+- DOMAIN-SUFFIX,smartmailcloud.com,SMVPN
+- DOMAIN-SUFFIX,sndcdn.com,SMVPN
+- DOMAIN-SUFFIX,sony.com,SMVPN
+- DOMAIN-SUFFIX,soundcloud.com,SMVPN
+- DOMAIN-SUFFIX,sourceforge.net,SMVPN
+- DOMAIN-SUFFIX,spotify.com,SMVPN
+- DOMAIN-SUFFIX,squarespace.com,SMVPN
+- DOMAIN-SUFFIX,sstatic.net,SMVPN
+- DOMAIN-SUFFIX,st.luluku.pw,SMVPN
+- DOMAIN-SUFFIX,stackoverflow.com,SMVPN
+- DOMAIN-SUFFIX,startpage.com,SMVPN
+- DOMAIN-SUFFIX,staticflickr.com,SMVPN
+- DOMAIN-SUFFIX,steamcommunity.com,SMVPN
+- DOMAIN-SUFFIX,symauth.com,SMVPN
+- DOMAIN-SUFFIX,symcb.com,SMVPN
+- DOMAIN-SUFFIX,symcd.com,SMVPN
+- DOMAIN-SUFFIX,tapbots.com,SMVPN
+- DOMAIN-SUFFIX,tapbots.net,SMVPN
+- DOMAIN-SUFFIX,tdesktop.com,SMVPN
+- DOMAIN-SUFFIX,techcrunch.com,SMVPN
+- DOMAIN-SUFFIX,techsmith.com,SMVPN
+- DOMAIN-SUFFIX,thepiratebay.org,SMVPN
+- DOMAIN-SUFFIX,theverge.com,SMVPN
+- DOMAIN-SUFFIX,time.com,SMVPN
+- DOMAIN-SUFFIX,timeinc.net,SMVPN
+- DOMAIN-SUFFIX,tiny.cc,SMVPN
+- DOMAIN-SUFFIX,tinypic.com,SMVPN
+- DOMAIN-SUFFIX,tmblr.co,SMVPN
+- DOMAIN-SUFFIX,todoist.com,SMVPN
+- DOMAIN-SUFFIX,trello.com,SMVPN
+- DOMAIN-SUFFIX,trustasiassl.com,SMVPN
+- DOMAIN-SUFFIX,tumblr.co,SMVPN
+- DOMAIN-SUFFIX,tumblr.com,SMVPN
+- DOMAIN-SUFFIX,tweetdeck.com,SMVPN
+- DOMAIN-SUFFIX,tweetmarker.net,SMVPN
+- DOMAIN-SUFFIX,twitch.tv,SMVPN
+- DOMAIN-SUFFIX,txmblr.com,SMVPN
+- DOMAIN-SUFFIX,typekit.net,SMVPN
+- DOMAIN-SUFFIX,ubertags.com,SMVPN
+- DOMAIN-SUFFIX,ublock.org,SMVPN
+- DOMAIN-SUFFIX,ubnt.com,SMVPN
+- DOMAIN-SUFFIX,ulyssesapp.com,SMVPN
+- DOMAIN-SUFFIX,urchin.com,SMVPN
+- DOMAIN-SUFFIX,usertrust.com,SMVPN
+- DOMAIN-SUFFIX,v.gd,SMVPN
+- DOMAIN-SUFFIX,v2ex.com,SMVPN
+- DOMAIN-SUFFIX,vimeo.com,SMVPN
+- DOMAIN-SUFFIX,vimeocdn.com,SMVPN
+- DOMAIN-SUFFIX,vine.co,SMVPN
+- DOMAIN-SUFFIX,vivaldi.com,SMVPN
+- DOMAIN-SUFFIX,vox-cdn.com,SMVPN
+- DOMAIN-SUFFIX,vsco.co,SMVPN
+- DOMAIN-SUFFIX,vultr.com,SMVPN
+- DOMAIN-SUFFIX,w.org,SMVPN
+- DOMAIN-SUFFIX,w3schools.com,SMVPN
+- DOMAIN-SUFFIX,webtype.com,SMVPN
+- DOMAIN-SUFFIX,wikiwand.com,SMVPN
+- DOMAIN-SUFFIX,wikileaks.org,SMVPN
+- DOMAIN-SUFFIX,wikimedia.org,SMVPN
+- DOMAIN-SUFFIX,wikipedia.com,SMVPN
+- DOMAIN-SUFFIX,wikipedia.org,SMVPN
+- DOMAIN-SUFFIX,windows.com,SMVPN
+- DOMAIN-SUFFIX,windows.net,SMVPN
+- DOMAIN-SUFFIX,wire.com,SMVPN
+- DOMAIN-SUFFIX,wordpress.com,SMVPN
+- DOMAIN-SUFFIX,workflowy.com,SMVPN
+- DOMAIN-SUFFIX,wp.com,SMVPN
+- DOMAIN-SUFFIX,wsj.com,SMVPN
+- DOMAIN-SUFFIX,wsj.net,SMVPN
+- DOMAIN-SUFFIX,xda-developers.com,SMVPN
+- DOMAIN-SUFFIX,xeeno.com,SMVPN
+- DOMAIN-SUFFIX,xiti.com,SMVPN
+- DOMAIN-SUFFIX,yahoo.com,SMVPN
+- DOMAIN-SUFFIX,yimg.com,SMVPN
+- DOMAIN-SUFFIX,ying.com,SMVPN
+- DOMAIN-SUFFIX,yoyo.org,SMVPN
+- DOMAIN-SUFFIX,ytimg.com,SMVPN
+- DOMAIN-SUFFIX,telegra.ph,SMVPN
+- DOMAIN-SUFFIX,telegram.org,SMVPN
+- IP-CIDR,91.108.4.0/22,SMVPN,no-resolve
+- IP-CIDR,91.108.8.0/21,SMVPN,no-resolve
+- IP-CIDR,91.108.16.0/22,SMVPN,no-resolve
+- IP-CIDR,91.108.56.0/22,SMVPN,no-resolve
+- IP-CIDR,149.154.160.0/20,SMVPN,no-resolve
+- IP-CIDR6,2001:67c:4e8::/48,SMVPN,no-resolve
+- IP-CIDR6,2001:b28:f23d::/48,SMVPN,no-resolve
+- IP-CIDR6,2001:b28:f23f::/48,SMVPN,no-resolve
+- IP-CIDR,120.232.181.162/32,SMVPN,no-resolve
+- IP-CIDR,120.241.147.226/32,SMVPN,no-resolve
+- IP-CIDR,120.253.253.226/32,SMVPN,no-resolve
+- IP-CIDR,120.253.255.162/32,SMVPN,no-resolve
+- IP-CIDR,120.253.255.34/32,SMVPN,no-resolve
+- IP-CIDR,120.253.255.98/32,SMVPN,no-resolve
+- IP-CIDR,180.163.150.162/32,SMVPN,no-resolve
+- IP-CIDR,180.163.150.34/32,SMVPN,no-resolve
+- IP-CIDR,180.163.151.162/32,SMVPN,no-resolve
+- IP-CIDR,180.163.151.34/32,SMVPN,no-resolve
+- IP-CIDR,203.208.39.0/24,SMVPN,no-resolve
+- IP-CIDR,203.208.40.0/24,SMVPN,no-resolve
+- IP-CIDR,203.208.41.0/24,SMVPN,no-resolve
+- IP-CIDR,203.208.43.0/24,SMVPN,no-resolve
+- IP-CIDR,203.208.50.0/24,SMVPN,no-resolve
+- IP-CIDR,220.181.174.162/32,SMVPN,no-resolve
+- IP-CIDR,220.181.174.226/32,SMVPN,no-resolve
+- IP-CIDR,220.181.174.34/32,SMVPN,no-resolve
+- DOMAIN,injections.adguard.org,DIRECT
+- DOMAIN,local.adguard.org,DIRECT
+- DOMAIN-SUFFIX,local,DIRECT
+- IP-CIDR,127.0.0.0/8,DIRECT
+- IP-CIDR,172.16.0.0/12,DIRECT
+- IP-CIDR,192.168.0.0/16,DIRECT
+- IP-CIDR,10.0.0.0/8,DIRECT
+- IP-CIDR,17.0.0.0/8,DIRECT
+- IP-CIDR,100.64.0.0/10,DIRECT
+- IP-CIDR,224.0.0.0/4,DIRECT
+- IP-CIDR6,fe80::/10,DIRECT
+- DOMAIN-SUFFIX,cn,DIRECT
+- DOMAIN-KEYWORD,-cn,DIRECT
+- MATCH,SMVPN
+udp: true

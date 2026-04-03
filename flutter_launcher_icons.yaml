@@ -1,0 +1,16 @@
+dev_dependencies:
+  flutter_launcher_icons: "^0.13.1"
+
+flutter_launcher_icons:
+  android: true 
+  ios: true
+  image_path: "assets/logo.png"
+  image_path_ios: "assets/logo.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#31DEDE"
+  adaptive_icon_foreground: "assets/logo.png"
+  windows:
+    generate: true
+    icon_size: 48
+    foreground_image_path: "assets/logo.png"
+    background_color: "#31DEDE"
