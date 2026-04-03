@@ -149,6 +149,9 @@ jobs:
           /usr/libexec/PlistBuddy -c "Print Entitlements" "$EXTENSION_PROFILE_PLIST"
           EXPORT_METHOD="development"
           EXPORT_SIGNING_CERT="Apple Development"
+          if [[ "$SIGNING_IDENTITY" == *"iPhone Developer"* ]]; then
+            EXPORT_SIGNING_CERT="iPhone Developer"
+          fi
           GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$MAIN_PROFILE_PLIST")
           if [ "$GET_TASK_ALLOW" != "true" ]; then
             echo "Provisioning profile is not a development profile (get-task-allow != true). Refusing to fall back."
@@ -180,6 +183,61 @@ jobs:
             -exportOptionsPlist "$EXPORT_PLIST" \
             -exportPath "$PWD/../build/ios/ipa"
           popd
+
+      - name: Validate exported IPA payload
+        run: |
+          set -eo pipefail
+          IPA_FILE=$(find build/ios/ipa -maxdepth 1 -name '*.ipa' | head -n 1)
+          if [ -z "$IPA_FILE" ]; then
+            echo "No IPA file found in build/ios/ipa"
+            exit 1
+          fi
+          IPA_EXTRACT_DIR="$RUNNER_TEMP/ipa_extract"
+          rm -rf "$IPA_EXTRACT_DIR"
+          mkdir -p "$IPA_EXTRACT_DIR"
+          unzip -q "$IPA_FILE" -d "$IPA_EXTRACT_DIR"
+          APP_DIR=$(find "$IPA_EXTRACT_DIR/Payload" -maxdepth 1 -name '*.app' | head -n 1)
+          if [ -z "$APP_DIR" ]; then
+            echo "Payload app not found in IPA"
+            exit 1
+          fi
+          APP_INFO_PLIST="$APP_DIR/Info.plist"
+          APP_MIN_IOS=$(/usr/libexec/PlistBuddy -c "Print MinimumOSVersion" "$APP_INFO_PLIST")
+          APP_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$APP_INFO_PLIST")
+          if [ "$APP_BUNDLE_ID" != "$MAIN_BUNDLE_ID" ]; then
+            echo "IPA main bundle id mismatch: expected $MAIN_BUNDLE_ID but got $APP_BUNDLE_ID"
+            exit 1
+          fi
+          APPEX_DIR=$(find "$APP_DIR/PlugIns" -maxdepth 1 -name '*.appex' | head -n 1)
+          if [ -z "$APPEX_DIR" ]; then
+            echo "PacketTunnel appex missing in IPA"
+            exit 1
+          fi
+          APPEX_INFO_PLIST="$APPEX_DIR/Info.plist"
+          APPEX_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$APPEX_INFO_PLIST")
+          if [ "$APPEX_BUNDLE_ID" != "$EXTENSION_BUNDLE_ID" ]; then
+            echo "IPA extension bundle id mismatch: expected $EXTENSION_BUNDLE_ID but got $APPEX_BUNDLE_ID"
+            exit 1
+          fi
+          APP_EMBEDDED="$APP_DIR/embedded.mobileprovision"
+          APPEX_EMBEDDED="$APPEX_DIR/embedded.mobileprovision"
+          if [ ! -f "$APP_EMBEDDED" ] || [ ! -f "$APPEX_EMBEDDED" ]; then
+            echo "embedded.mobileprovision missing in app or extension"
+            exit 1
+          fi
+          APP_PROFILE_PLIST="$RUNNER_TEMP/ipa_main_profile.plist"
+          APPEX_PROFILE_PLIST="$RUNNER_TEMP/ipa_extension_profile.plist"
+          security cms -D -i "$APP_EMBEDDED" > "$APP_PROFILE_PLIST"
+          security cms -D -i "$APPEX_EMBEDDED" > "$APPEX_PROFILE_PLIST"
+          APP_GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$APP_PROFILE_PLIST")
+          APPEX_GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$APPEX_PROFILE_PLIST")
+          if [ "$APP_GET_TASK_ALLOW" != "true" ] || [ "$APPEX_GET_TASK_ALLOW" != "true" ]; then
+            echo "IPA embedded profiles are not development profiles"
+            exit 1
+          fi
+          echo "IPA minimum iOS version: $APP_MIN_IOS"
+          echo "IPA app bundle id: $APP_BUNDLE_ID"
+          echo "IPA extension bundle id: $APPEX_BUNDLE_ID"
 
       - name: Prepare IPA artifact
         id: ipa_meta
