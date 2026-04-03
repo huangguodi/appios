@@ -569,6 +569,9 @@ class ApiService {
     milliseconds: 800,
   );
   static const int _nativeKeyFetchAttempts = 8;
+  static const Duration _nativeKeyFetchRetryDelay = Duration(
+    milliseconds: 250,
+  );
 
   Future<bool> _waitForNativeChannelReady() async {
     if (!Platform.isIOS) {
@@ -603,31 +606,35 @@ class ApiService {
 
       final attempts = Platform.isIOS ? _nativeKeyFetchAttempts : 1;
       for (var attempt = 0; attempt < attempts; attempt++) {
-        final aes = (await _mihomoChannel.invokeMethod<String>('getAesKey'))
-            ?.trim();
-        final obf =
-            (await _mihomoChannel.invokeMethod<String>('getObfuscateKey'))
-                ?.trim();
-        final url =
-            (await _mihomoChannel.invokeMethod<String>('getServerUrlKey'))
-                ?.trim();
-        final loaded =
-            aes != null &&
-            aes.isNotEmpty &&
-            obf != null &&
-            obf.isNotEmpty &&
-            url != null &&
-            _isValidServerUrl(url);
-        if (loaded) {
-          _dynamicAesKey = aes;
-          _dynamicObfuscateKey = obf;
-          _dynamicServerUrlKey = url;
-          _keysLoaded = true;
-          _log("DEBUG: Native keys loaded successfully.");
-          return;
+        try {
+          final aes = (await _mihomoChannel.invokeMethod<String>('getAesKey'))
+              ?.trim();
+          final obf =
+              (await _mihomoChannel.invokeMethod<String>('getObfuscateKey'))
+                  ?.trim();
+          final url =
+              (await _mihomoChannel.invokeMethod<String>('getServerUrlKey'))
+                  ?.trim();
+          final loaded =
+              aes != null &&
+              aes.isNotEmpty &&
+              obf != null &&
+              obf.isNotEmpty &&
+              url != null &&
+              _isValidServerUrl(url);
+          if (loaded) {
+            _dynamicAesKey = aes;
+            _dynamicObfuscateKey = obf;
+            _dynamicServerUrlKey = url;
+            _keysLoaded = true;
+            _log("DEBUG: Native keys loaded successfully.");
+            return;
+          }
+        } catch (e) {
+          _log("DEBUG: Native key fetch attempt failed. Error: $e");
         }
         if (attempt + 1 < attempts) {
-          await Future.delayed(_nativeChannelRetryDelay);
+          await Future.delayed(_nativeKeyFetchRetryDelay);
         }
       }
       _keysLoaded = false;
@@ -644,6 +651,15 @@ class ApiService {
     }
     final uri = Uri.tryParse(value);
     return uri != null && uri.hasScheme && uri.host.isNotEmpty;
+  }
+
+  Future<bool> ensureNativeServerUrlReady() async {
+    if (!Platform.isIOS) {
+      return true;
+    }
+    await initNativeKeys(forceRefresh: true);
+    final url = _dynamicServerUrlKey.trim();
+    return url.isNotEmpty && _isValidServerUrl(url);
   }
 
   Future<Uri?> resolveStartupProbeUri() async {

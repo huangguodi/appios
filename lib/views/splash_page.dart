@@ -74,6 +74,16 @@ class _SplashPageState extends State<SplashPage> {
     _clearStartupFailure();
     AppLogger.d('Splash: init start');
     try {
+      if (Platform.isIOS) {
+        final serverReady = await ApiService().ensureNativeServerUrlReady();
+        if (!serverReady) {
+          _showStartupFailure(
+            category: AppFailureCategory.hotUpdate,
+            detail: 'Native server url is empty',
+          );
+          return;
+        }
+      }
       final canContinue = await _runHotUpdateBeforeLogin();
       if (!canContinue || !mounted) {
         AppLogger.w('Splash: init interrupted before login');
