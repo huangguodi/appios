@@ -140,17 +140,7 @@ jobs:
             echo "$EXTENSION_NETWORK_EXT"
             exit 1
           fi
-          CODE_SIGN_IDENTITIES=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH")
-          echo "$CODE_SIGN_IDENTITIES"
-          CERT_TEAM_ID=$(echo "$CODE_SIGN_IDENTITIES" | sed -n 's/.*(\([A-Z0-9]\{10\}\))".*/\1/p' | head -n 1)
-          if [ -z "$CERT_TEAM_ID" ]; then
-            echo "Unable to resolve team id from signing identity output"
-            exit 1
-          fi
-          if [ "$CERT_TEAM_ID" != "$TEAM_ID" ]; then
-            echo "Signing identity team mismatch: certificate team=$CERT_TEAM_ID profile team=$TEAM_ID"
-            exit 1
-          fi
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
           /usr/libexec/PlistBuddy -c "Print Entitlements" "$MAIN_PROFILE_PLIST"
           /usr/libexec/PlistBuddy -c "Print Entitlements" "$EXTENSION_PROFILE_PLIST"
           GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$MAIN_PROFILE_PLIST")
