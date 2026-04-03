@@ -12,6 +12,7 @@ jobs:
     env:
       MAIN_BUNDLE_ID: com.xiangyu.clash
       EXTENSION_BUNDLE_ID: com.xiangyu.clash.packettunnel
+      APP_GROUP_ID: group.com.xiangyu.clash
       IOS_P12_FILE: ios_cert/dev.p12
       IOS_MAIN_MOBILEPROVISION_FILE: ios_cert/Clash_Main_Profile.mobileprovision
       IOS_EXTENSION_MOBILEPROVISION_FILE: ios_cert/Clash_Extension_Profile.mobileprovision
@@ -91,11 +92,17 @@ jobs:
           EXTENSION_APP_IDENTIFIER=$(/usr/libexec/PlistBuddy -c "Print Entitlements:application-identifier" "$EXTENSION_PROFILE_PLIST")
           PROFILE_MAIN_BUNDLE_ID=${MAIN_APP_IDENTIFIER#${TEAM_ID}.}
           PROFILE_EXTENSION_BUNDLE_ID=${EXTENSION_APP_IDENTIFIER#${TEAM_ID}.}
-          if [ -n "$PROFILE_MAIN_BUNDLE_ID" ] && [ "$PROFILE_MAIN_BUNDLE_ID" != "*" ]; then
-            MAIN_BUNDLE_ID="$PROFILE_MAIN_BUNDLE_ID"
+          if [ "$PROFILE_MAIN_BUNDLE_ID" = "*" ] || [ "$PROFILE_EXTENSION_BUNDLE_ID" = "*" ]; then
+            echo "Provisioning profile bundle id cannot be wildcard for Network Extension signing"
+            exit 1
           fi
-          if [ -n "$PROFILE_EXTENSION_BUNDLE_ID" ] && [ "$PROFILE_EXTENSION_BUNDLE_ID" != "*" ]; then
-            EXTENSION_BUNDLE_ID="$PROFILE_EXTENSION_BUNDLE_ID"
+          if [ "$PROFILE_MAIN_BUNDLE_ID" != "$MAIN_BUNDLE_ID" ]; then
+            echo "Main bundle id mismatch: expected $MAIN_BUNDLE_ID but profile is $PROFILE_MAIN_BUNDLE_ID"
+            exit 1
+          fi
+          if [ "$PROFILE_EXTENSION_BUNDLE_ID" != "$EXTENSION_BUNDLE_ID" ]; then
+            echo "Extension bundle id mismatch: expected $EXTENSION_BUNDLE_ID but profile is $PROFILE_EXTENSION_BUNDLE_ID"
+            exit 1
           fi
           if ! /usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.security.application-groups" "$MAIN_PROFILE_PLIST" >/dev/null 2>&1; then
             echo "Main provisioning profile missing App Groups entitlement"
@@ -117,8 +124,8 @@ jobs:
           EXTENSION_APP_GROUPS=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.security.application-groups" "$EXTENSION_PROFILE_PLIST" 2>/dev/null || true)
           MAIN_NETWORK_EXT=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.developer.networking.networkextension" "$MAIN_PROFILE_PLIST" 2>/dev/null || true)
           EXTENSION_NETWORK_EXT=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.developer.networking.networkextension" "$EXTENSION_PROFILE_PLIST" 2>/dev/null || true)
-          if [[ "$MAIN_APP_GROUPS" != *"group.com.xiangyu.clash"* ]] || [[ "$EXTENSION_APP_GROUPS" != *"group.com.xiangyu.clash"* ]]; then
-            echo "Provisioning profile App Groups mismatch. Expected group.com.xiangyu.clash"
+          if [[ "$MAIN_APP_GROUPS" != *"$APP_GROUP_ID"* ]] || [[ "$EXTENSION_APP_GROUPS" != *"$APP_GROUP_ID"* ]]; then
+            echo "Provisioning profile App Groups mismatch. Expected $APP_GROUP_ID"
             echo "Main profile groups:"
             echo "$MAIN_APP_GROUPS"
             echo "Extension profile groups:"
@@ -133,6 +140,8 @@ jobs:
             echo "$EXTENSION_NETWORK_EXT"
             exit 1
           fi
+          /usr/libexec/PlistBuddy -c "Print Entitlements" "$MAIN_PROFILE_PLIST"
+          /usr/libexec/PlistBuddy -c "Print Entitlements" "$EXTENSION_PROFILE_PLIST"
           GET_TASK_ALLOW=$(/usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" "$MAIN_PROFILE_PLIST")
           HAS_PROVISIONED_DEVICES="false"
           if /usr/libexec/PlistBuddy -c "Print ProvisionedDevices:0" "$MAIN_PROFILE_PLIST" >/dev/null 2>&1; then
@@ -159,8 +168,8 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :signingCertificate string $SIGNING_CERTIFICATE" "$EXPORT_PLIST"
           /usr/libexec/PlistBuddy -c "Add :provisioningProfiles dict" "$EXPORT_PLIST"
-          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$MAIN_BUNDLE_ID string $MAIN_PROFILE_UUID" "$EXPORT_PLIST"
-          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$EXTENSION_BUNDLE_ID string $EXTENSION_PROFILE_UUID" "$EXPORT_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$MAIN_BUNDLE_ID string $MAIN_PROFILE_NAME" "$EXPORT_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$EXTENSION_BUNDLE_ID string $EXTENSION_PROFILE_NAME" "$EXPORT_PLIST"
           pushd ios
           xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release \
             -destination "generic/platform=iOS" \
