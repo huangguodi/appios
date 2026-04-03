@@ -568,6 +568,7 @@ class ApiService {
   static const Duration _nativeChannelReadyCallTimeout = Duration(
     milliseconds: 800,
   );
+  static const int _nativeKeyFetchAttempts = 8;
 
   Future<bool> _waitForNativeChannelReady() async {
     if (!Platform.isIOS) {
@@ -589,11 +590,10 @@ class ApiService {
     return false;
   }
 
-  Future<void> initNativeKeys() async {
-    if (_keysLoaded) return;
+  Future<void> initNativeKeys({bool forceRefresh = false}) async {
+    if (_keysLoaded && !forceRefresh) return;
 
     try {
-      // Ensure Flutter bindings are initialized before using MethodChannel
       WidgetsFlutterBinding.ensureInitialized();
       final channelReady = await _waitForNativeChannelReady();
       if (!channelReady) {
@@ -601,22 +601,49 @@ class ApiService {
         return;
       }
 
-      // 尝试从原生层获取密钥
-      final aes = await _mihomoChannel.invokeMethod<String>('getAesKey');
-      final obf = await _mihomoChannel.invokeMethod<String>('getObfuscateKey');
-      final url = await _mihomoChannel.invokeMethod<String>('getServerUrlKey');
-
-      if (aes != null && aes.isNotEmpty) _dynamicAesKey = aes;
-      if (obf != null && obf.isNotEmpty) _dynamicObfuscateKey = obf;
-      if (url != null && url.isNotEmpty) _dynamicServerUrlKey = url;
-
-      _keysLoaded = true;
-      _log(
-        "DEBUG: Native keys loaded successfully. AES: ${_dynamicAesKey.isNotEmpty}",
-      );
+      final attempts = Platform.isIOS ? _nativeKeyFetchAttempts : 1;
+      for (var attempt = 0; attempt < attempts; attempt++) {
+        final aes = (await _mihomoChannel.invokeMethod<String>('getAesKey'))
+            ?.trim();
+        final obf =
+            (await _mihomoChannel.invokeMethod<String>('getObfuscateKey'))
+                ?.trim();
+        final url =
+            (await _mihomoChannel.invokeMethod<String>('getServerUrlKey'))
+                ?.trim();
+        final loaded =
+            aes != null &&
+            aes.isNotEmpty &&
+            obf != null &&
+            obf.isNotEmpty &&
+            url != null &&
+            _isValidServerUrl(url);
+        if (loaded) {
+          _dynamicAesKey = aes;
+          _dynamicObfuscateKey = obf;
+          _dynamicServerUrlKey = url;
+          _keysLoaded = true;
+          _log("DEBUG: Native keys loaded successfully.");
+          return;
+        }
+        if (attempt + 1 < attempts) {
+          await Future.delayed(_nativeChannelRetryDelay);
+        }
+      }
+      _keysLoaded = false;
+      _log("DEBUG: Native keys not ready yet.");
     } catch (e) {
+      _keysLoaded = false;
       _log("DEBUG: Failed to load native keys. Error: $e");
     }
+  }
+
+  bool _isValidServerUrl(String value) {
+    if (!value.startsWith('http')) {
+      return false;
+    }
+    final uri = Uri.tryParse(value);
+    return uri != null && uri.hasScheme && uri.host.isNotEmpty;
   }
 
   Future<Uri?> resolveStartupProbeUri() async {

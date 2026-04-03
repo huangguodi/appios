@@ -13,7 +13,7 @@ DART_XOR_KEY = "TGS_VPN_2024_PROD_API_KEY_998877"
 PATHS = {
     "android": "android/app/src/main/cpp/keys.cpp",
     "windows": "windows/runner/flutter_window.cpp",
-    "ios": "ios/Runner/AppDelegate.swift",
+    "ios": "ios/Runner/MihomoIosPlugin.swift",
     "dart": "lib/services/api_service.dart"
 }
 
@@ -49,14 +49,14 @@ def generate_swift_bytes(url):
 def update_file(filepath, pattern, new_content):
     """安全地使用正则替换文件中的目标区块"""
     if not os.path.exists(filepath):
-        print(f"❌ [错误] 找不到文件: {filepath}")
+        print(f"[错误] 找不到文件: {filepath}")
         return False
         
     with open(filepath, 'r', encoding='utf-8') as f:
         content = f.read()
         
     if not re.search(pattern, content):
-        print(f"⚠️ [警告] 未找到匹配的注入点 (可能文件已被修改或结构错误): {filepath}")
+        print(f"[警告] 未找到匹配的注入点 (可能文件已被修改或结构错误): {filepath}")
         return False
 
     # 使用正则的分组替换，仅替换第二组（即数组内容），保留第一组和第三组（外围结构）
@@ -69,20 +69,20 @@ def update_file(filepath, pattern, new_content):
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(new_content_full)
         
-    print(f"✅ [成功] 已更新: {filepath}")
+    print(f"[成功] 已更新: {filepath}")
     return True
 
 def main():
     if len(sys.argv) != 2:
         print("\n==================================================")
-        print("🔧 VPN 服务端地址一键修改工具")
+        print("VPN 服务端地址一键修改工具")
         print("==================================================")
         print("用法: python update_server_url.py <新的服务端URL>")
         print("示例: python update_server_url.py https://vpnapis.com\n")
         sys.exit(1)
         
     new_url = sys.argv[1].strip()
-    print(f"\n🚀 正在将服务端地址更新为: {new_url}\n")
+    print(f"\n正在将服务端地址更新为: {new_url}\n")
     
     native_bytes_str = generate_native_bytes(new_url)
     swift_bytes_str = generate_swift_bytes(new_url)
@@ -100,8 +100,8 @@ def main():
     if update_file(PATHS["windows"], windows_pattern, native_bytes_str):
         success_count += 1
 
-    # 3. 更新 iOS Native (AppDelegate.swift)
-    ios_pattern = r'(private func nativeServerUrlKey\(\) -> String\s*\{\s*return xorDecode\(\[)([\s\S]*?)(\]\)\s*\})'
+    # 3. 更新 iOS Native (MihomoIosPlugin.swift)
+    ios_pattern = r'(static let serverUrlEnc:\s*\[UInt8\]\s*=\s*\[)([\s\S]*?)(\])'
     if update_file(PATHS["ios"], ios_pattern, swift_bytes_str):
         success_count += 1
         
@@ -110,8 +110,8 @@ def main():
     # if update_file(PATHS["dart"], dart_pattern, "[]"):
     #    success_count += 1
         
-    print(f"\n🎉 [完成] 成功更新了 {success_count}/3 个文件！(Dart 层已改为完全动态获取，无需静态修改)")
-    print("💡 提示: 修改完成后，请直接运行打包命令 (flutter build apk / ios / windows) 即可生效。")
+    print(f"\n[完成] 成功更新了 {success_count}/3 个文件！(Dart 层已改为完全动态获取，无需静态修改)")
+    print("提示: 修改完成后，请直接运行打包命令 (flutter build apk / ios / windows) 即可生效。")
 
 if __name__ == "__main__":
     main()
