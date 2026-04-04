@@ -43,6 +43,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   private let tunOpenStateLock = NSLock()
   private var started = false
   private var currentSessionId = ""
+  private var pathMonitor: NWPathMonitor?
   private var sharedStateTimer: DispatchSourceTimer?
   private var lastPersistedTrafficSnapshot = TrafficSnapshot.empty
   private var lastPersistedTrafficAt: TimeInterval = 0
@@ -56,6 +57,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   private var lastTunOpenFD: Int64 = 0
   private var lastTunOpenError: String?
   private var activeConfigFileName = ""
+  private var currentPathNetworkType: PhysicalNetworkType = .unknown
   private var lastKnownPhysicalNetworkType: PhysicalNetworkType = .unknown
   private var lastObservedPhysicalNetworkType: PhysicalNetworkType = .unknown
   private var lastObservedPhysicalInterfaceName: String?
@@ -272,10 +274,12 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     currentSessionId = sessionId
     activeConfigFileName = configFileName
     started = false
+    currentPathNetworkType = .unknown
     lastObservedPhysicalNetworkType = .unknown
     lastObservedPhysicalInterfaceName = nil
     lastAggressiveRefreshAt = 0
     lastKnownPhysicalNetworkType = .unknown
+    startPathMonitor()
     stopSharedStateTimer()
     lastPersistedTrafficSnapshot = .empty
     lastPersistedTrafficAt = 0
@@ -289,8 +293,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     tunOpener = nil
     socketProtector = nil
     activeConfigFileName = ""
+    stopPathMonitor()
     stopSharedStateTimer()
     started = false
+    currentPathNetworkType = .unknown
     lastObservedPhysicalNetworkType = .unknown
     lastObservedPhysicalInterfaceName = nil
     lastAggressiveRefreshAt = 0
@@ -807,19 +813,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   }
 
   private func resolveCurrentPhysicalNetworkType(from interfaces: [String]) -> PhysicalNetworkType {
-    if let path = defaultPath, path.status == .satisfied {
-      if path.usesInterfaceType(.cellular) {
-        lastKnownPhysicalNetworkType = .cellular
-        return .cellular
-      }
-      if path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet) {
-        lastKnownPhysicalNetworkType = .wifi
-        return .wifi
-      }
-      if path.usesInterfaceType(.other) {
-        lastKnownPhysicalNetworkType = .other
-        return .other
-      }
+    if currentPathNetworkType != .unknown {
+      lastKnownPhysicalNetworkType = currentPathNetworkType
+      return currentPathNetworkType
     }
 
     let hasWiFiLikeInterface = containsInterface(
@@ -851,6 +847,37 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       return lastKnownPhysicalNetworkType
     }
     return .unknown
+  }
+
+  private func startPathMonitor() {
+    stopPathMonitor()
+    let monitor = NWPathMonitor()
+    monitor.pathUpdateHandler = { [weak self] path in
+      guard let strongSelf = self else {
+        return
+      }
+      strongSelf.currentPathNetworkType = strongSelf.physicalNetworkType(from: path)
+    }
+    monitor.start(queue: actionQueue)
+    pathMonitor = monitor
+  }
+
+  private func stopPathMonitor() {
+    pathMonitor?.cancel()
+    pathMonitor = nil
+  }
+
+  private func physicalNetworkType(from path: NWPath) -> PhysicalNetworkType {
+    guard path.status == .satisfied else {
+      return .unknown
+    }
+    if path.usesInterfaceType(.cellular) {
+      return .cellular
+    }
+    if path.usesInterfaceType(.wifi) {
+      return .wifi
+    }
+    return .other
   }
 
   private func preferredInterfacePrefixes(for networkType: PhysicalNetworkType) -> [[String]] {
