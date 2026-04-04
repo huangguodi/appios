@@ -36,7 +36,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   private let tunOpenStateLock = NSLock()
   private var started = false
   private var currentSessionId = ""
-  private var trafficTimer: DispatchSourceTimer?
+  private var sharedStateTimer: DispatchSourceTimer?
   private var lastPersistedTrafficSnapshot = TrafficSnapshot.empty
   private var lastPersistedTrafficAt: TimeInterval = 0
   private var currentTunnelInterfaceName: String?
@@ -166,7 +166,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             return
           }
           self.started = true
-          self.startTrafficTimer(appGroupId: appGroupId)
+          self.startSharedStateTimer(appGroupId: appGroupId)
           self.persistRunningState(appGroupId: appGroupId, sessionId: sessionId)
           finish(nil)
           self.actionQueue.async { [weak self] in
@@ -252,7 +252,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   private func prepareForStart(sessionId: String) {
     currentSessionId = sessionId
     started = false
-    stopTrafficTimer()
+    stopSharedStateTimer()
     lastPersistedTrafficSnapshot = .empty
     lastPersistedTrafficAt = 0
     resetTrafficSampling()
@@ -264,7 +264,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     MobileClearSocketProtector()
     tunOpener = nil
     socketProtector = nil
-    stopTrafficTimer()
+    stopSharedStateTimer()
     started = false
     resetTrafficSampling()
   }
@@ -951,20 +951,20 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     return (providerConfig["appGroupId"] as? String) ?? defaultAppGroupId
   }
 
-  private func startTrafficTimer(appGroupId: String) {
-    stopTrafficTimer()
+  private func startSharedStateTimer(appGroupId: String) {
+    stopSharedStateTimer()
     let timer = DispatchSource.makeTimerSource(queue: actionQueue)
     timer.schedule(deadline: .now(), repeating: 1.0, leeway: .milliseconds(200))
     timer.setEventHandler { [weak self] in
-      self?.refreshTrafficOnly(appGroupId: appGroupId)
+      self?.refreshSharedStateHeartbeat(appGroupId: appGroupId)
     }
-    trafficTimer = timer
+    sharedStateTimer = timer
     timer.resume()
   }
 
-  private func stopTrafficTimer() {
-    trafficTimer?.cancel()
-    trafficTimer = nil
+  private func stopSharedStateTimer() {
+    sharedStateTimer?.cancel()
+    sharedStateTimer = nil
   }
 
   private func resetTrafficSampling() {
@@ -1011,7 +1011,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   private func currentTrafficSnapshot() -> TrafficSnapshot {
     let status = started ? "running" : "stopped"
     let mode = started ? MobileGetMode() : ""
-    let traffic = resolveNetworkExtensionTrafficRates() ?? resolveKernelTrafficRates()
+    let traffic = resolveNetworkExtensionTrafficRates() ?? (
+      up: lastPersistedTrafficSnapshot.up,
+      down: lastPersistedTrafficSnapshot.down
+    )
     return TrafficSnapshot(
       status: status,
       running: started,
@@ -1053,39 +1056,6 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       up: max(uploadBytesPerSecond, 0),
       down: max(downloadBytesPerSecond, 0)
     )
-  }
-
-  private func resolveKernelTrafficRates() -> (up: Int64, down: Int64) {
-    let instantaneousUp = max(Int64(MobileTrafficUp()), 0)
-    let instantaneousDown = max(Int64(MobileTrafficDown()), 0)
-    let totalUp = max(Int64(MobileTrafficTotalUp()), 0)
-    let totalDown = max(Int64(MobileTrafficTotalDown()), 0)
-    let now = Date().timeIntervalSince1970
-    guard
-      let previousTotalUp = lastTunnelInterfaceTxBytes,
-      let previousTotalDown = lastTunnelInterfaceRxBytes,
-      lastTrafficSampleAt > 0
-    else {
-      lastTunnelInterfaceTxBytes = totalUp
-      lastTunnelInterfaceRxBytes = totalDown
-      lastTrafficSampleAt = now
-      return (instantaneousUp, instantaneousDown)
-    }
-    lastTunnelInterfaceTxBytes = totalUp
-    lastTunnelInterfaceRxBytes = totalDown
-    let elapsed = now - lastTrafficSampleAt
-    lastTrafficSampleAt = now
-    guard elapsed > 0.2 else {
-      return (lastPersistedTrafficSnapshot.up, lastPersistedTrafficSnapshot.down)
-    }
-    guard totalUp >= previousTotalUp, totalDown >= previousTotalDown else {
-      return (instantaneousUp, instantaneousDown)
-    }
-    let derivedUp = Int64(Double(totalUp - previousTotalUp) / elapsed)
-    let derivedDown = Int64(Double(totalDown - previousTotalDown) / elapsed)
-    let resolvedUp = derivedUp > 0 ? derivedUp : instantaneousUp
-    let resolvedDown = derivedDown > 0 ? derivedDown : instantaneousDown
-    return (resolvedUp, resolvedDown)
   }
 
   private func resolveCurrentTunnelInterfaceName() -> String? {
@@ -1194,6 +1164,21 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         state.proxies = proxies
         state.selectedProxyByGroup = selectedMap
       }
+    }
+  }
+
+  private func refreshSharedStateHeartbeat(appGroupId: String) {
+    persistState(appGroupId: appGroupId) { state in
+      if !currentSessionId.isEmpty {
+        state.sessionId = currentSessionId
+      }
+      state.running = started
+      state.status = started ? "running" : "stopped"
+      state.mode = started ? MobileGetMode() : ""
+      state.up = lastPersistedTrafficSnapshot.up
+      state.down = lastPersistedTrafficSnapshot.down
+      state.updatedAt = Date().timeIntervalSince1970
+      state.lastError = nil
     }
   }
 

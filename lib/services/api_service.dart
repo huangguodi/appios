@@ -1360,45 +1360,50 @@ class ApiService {
     String? deviceId;
     final DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
 
-    try {
-      if (Platform.isAndroid) {
-        const androidIdPlugin = AndroidId();
-        deviceId = await androidIdPlugin.getId();
-      } else if (Platform.isWindows) {
-        final windowsInfo = await deviceInfo.windowsInfo;
-        deviceId = windowsInfo.deviceId;
-      } else if (Platform.isIOS) {
-        final iosInfo = await deviceInfo.iosInfo;
-        deviceId = iosInfo.identifierForVendor;
+    if (Platform.isIOS) {
+      try {
+        deviceId = await _secureStorage.read(key: 'ios_device_uuid');
+      } catch (e) {
+        _log("DEBUG: Secure storage iOS device id read failed: $e");
       }
-    } catch (e) {
-      _log("DEBUG: Error getting platform specific device info: $e");
-    }
 
-    if (deviceId == null || deviceId.isEmpty) {
-      if (Platform.isIOS) {
-        try {
-          deviceId = await _secureStorage.read(key: 'ios_device_uuid');
-        } catch (e) {
-          _log("DEBUG: Secure storage iOS device id read failed: $e");
-        }
+      if (deviceId == null || deviceId.isEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        deviceId = prefs.getString('device_uuid');
       }
-    }
 
-    if (deviceId == null || deviceId.isEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      deviceId = prefs.getString('device_uuid');
-      if (deviceId == null) {
+      if (deviceId == null || deviceId.isEmpty) {
         deviceId = const Uuid().v4();
-        await prefs.setString('device_uuid', deviceId);
       }
-    }
 
-    if (Platform.isIOS && deviceId.isNotEmpty) {
       try {
         await _secureStorage.write(key: 'ios_device_uuid', value: deviceId);
       } catch (e) {
         _log("DEBUG: Secure storage iOS device id write failed: $e");
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('device_uuid', deviceId);
+    } else {
+      try {
+        if (Platform.isAndroid) {
+          const androidIdPlugin = AndroidId();
+          deviceId = await androidIdPlugin.getId();
+        } else if (Platform.isWindows) {
+          final windowsInfo = await deviceInfo.windowsInfo;
+          deviceId = windowsInfo.deviceId;
+        }
+      } catch (e) {
+        _log("DEBUG: Error getting platform specific device info: $e");
+      }
+
+      if (deviceId == null || deviceId.isEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        deviceId = prefs.getString('device_uuid');
+        if (deviceId == null) {
+          deviceId = const Uuid().v4();
+          await prefs.setString('device_uuid', deviceId);
+        }
       }
     }
 

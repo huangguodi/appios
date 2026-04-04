@@ -36,6 +36,11 @@ class MihomoService {
     milliseconds: 700,
   );
   static const Duration _windowsProxyRetryTimeout = Duration(seconds: 8);
+  static const Duration _windowsProxyProbeTimeout = Duration(
+    milliseconds: 250,
+  );
+  static const String _windowsProxyHost = '127.0.0.1';
+  static const int _windowsProxyPort = 7890;
   static const int _maxRecentNativeLogs = 200;
   static const int _nativeChannelReadyAttempts = 10;
   static const Duration _nativeChannelRetryDelay = Duration(milliseconds: 200);
@@ -337,9 +342,7 @@ class MihomoService {
 
   /// Listen to native logs
   void _listenToNativeLogs() {
-    if (kIsWeb ||
-        !(Platform.isAndroid || Platform.isWindows) ||
-        _nativeLogsSubscription != null) {
+    if (kIsWeb || !Platform.isAndroid || _nativeLogsSubscription != null) {
       return;
     }
     _nativeLogsSubscription =
@@ -714,13 +717,6 @@ class MihomoService {
           _activeIosSessionId = sessionId;
         }
       }
-      if (Platform.isWindows) {
-        final proxyEnsured = await ensureSystemProxyEnabled();
-        AppLogger.d(
-          "MihomoService: Windows proxy verification after start=$proxyEnsured",
-        );
-      }
-
       _restartCount = 0;
       if (Platform.isIOS) {
         _cacheRunningState(false);
@@ -1049,6 +1045,25 @@ class MihomoService {
     }
   }
 
+  Future<bool> ensureWindowsProxyReadyAndEnabled({
+    Duration timeout = _windowsProxyRetryTimeout,
+  }) async {
+    if (kIsWeb || !Platform.isWindows) {
+      return true;
+    }
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      if (await _isWindowsLocalProxyReady()) {
+        return ensureSystemProxyEnabled();
+      }
+      await Future.delayed(_windowsProxyRetryInterval);
+    }
+    AppLogger.w(
+      "MihomoService: Windows local proxy not ready at $_windowsProxyHost:$_windowsProxyPort",
+    );
+    return false;
+  }
+
   Future<bool> checkIsRunning({bool forceRefresh = false}) async {
     if (!forceRefresh &&
         _isStatusCacheFresh(_cachedIsRunningAt) &&
@@ -1081,6 +1096,30 @@ class MihomoService {
     } catch (e) {
       _cacheRunningState(false);
       return false;
+    }
+  }
+
+  Future<bool> _isWindowsLocalProxyReady() async {
+    if (kIsWeb || !Platform.isWindows) {
+      return true;
+    }
+    Socket? socket;
+    try {
+      socket = await Socket.connect(
+        _windowsProxyHost,
+        _windowsProxyPort,
+        timeout: _windowsProxyProbeTimeout,
+      );
+      return true;
+    } on SocketException {
+      return false;
+    } on TimeoutException {
+      return false;
+    } catch (e) {
+      AppLogger.w("MihomoService: Windows proxy probe error: $e");
+      return false;
+    } finally {
+      socket?.destroy();
     }
   }
 
@@ -1201,6 +1240,10 @@ class MihomoService {
       if (running) {
         final mode = await probeMode(timeout: _startupReadyProbeTimeout);
         if (mode != null && mode.isNotEmpty) {
+          if (Platform.isWindows && !await _isWindowsLocalProxyReady()) {
+            await Future.delayed(_startupReadyPollInterval);
+            continue;
+          }
           _cacheRunningState(true);
           return true;
         }
@@ -1425,22 +1468,6 @@ class MihomoService {
 
   Future<Map<String, dynamic>> _getProxiesNative() async {
     try {
-      if (Platform.isWindows) {
-        final String? listStr = await _channel.invokeMethod('getProxyListStr');
-        if (listStr != null && listStr.isNotEmpty) {
-          AppLogger.d(
-            "MihomoService: getProxyListStr payload bytes=${listStr.length}",
-          );
-          final parsed = await compute(_parseProxyListStr, listStr);
-          _updateProxyCache(parsed);
-          _syncLightweightCacheFromProxies(parsed);
-          return parsed;
-        }
-        AppLogger.w(
-          "MihomoService: getProxyListStr empty, fallback to getProxies",
-        );
-      }
-
       final dynamic result = await _channel.invokeMethod('getProxies');
       if (result is String) {
         AppLogger.d("MihomoService: getProxies string bytes=${result.length}");
@@ -1508,64 +1535,6 @@ class MihomoService {
     }
     _lastSelectedGlobalProxy = now;
     _cacheSelectedProxy('GLOBAL', now);
-  }
-
-  // Helper to parse the pipe-separated string format
-  static Map<String, dynamic> _parseProxyListStr(String listStr) {
-    final Map<String, dynamic> proxies = {};
-    // Format: name-type-adds-country-udp|...
-    final items = listStr.split('|');
-
-    // Construct a fake "proxies" map and "GLOBAL" group
-    final allNames = <String>[];
-
-    for (final item in items) {
-      if (item.isEmpty) continue;
-
-      // Split by '-' but be careful about names containing '-'
-      // We know the last 4 fields are fixed: type, server, country, udp
-      // So we split and take from end.
-      // Actually, simple split might fail if name has dashes.
-      // Let's assume the user's format implies simple structure or we find last 4 dashes.
-
-      // Safer approach: reverse string, find first 4 dashes.
-      // item: "My-Proxy-Node-Shadowsocks-1.2.3.4-Unknown-true"
-
-      final parts = item.split('-');
-      if (parts.length < 5) continue;
-
-      final udp = parts.last == 'true';
-      final country = parts[parts.length - 2];
-      final server = parts[parts.length - 3];
-      final type = parts[parts.length - 4];
-
-      // Name is everything before type
-      final nameParts = parts.sublist(0, parts.length - 4);
-      final name = nameParts.join('-');
-
-      allNames.add(name);
-
-      proxies[name] = {
-        'name': name,
-        'type': type,
-        'server': server, // Using server as "adds" (address)
-        'country': country,
-        'udp': udp,
-        // 'country': country // Not standard field in proxies map usually, but can add
-        // Add extra fields expected by UI
-        'history': [],
-        'now': '',
-      };
-    }
-
-    return {
-      'proxies': proxies,
-      'GLOBAL': {
-        'all': allNames,
-        'type': 'Selector',
-        'now': allNames.isNotEmpty ? allNames.first : '',
-      },
-    };
   }
 
   static Map<String, dynamic> _parseProxiesPayload(String payload) {

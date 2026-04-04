@@ -247,7 +247,9 @@ class HomeViewModel extends ChangeNotifier {
         return null;
       }
     }
-    await service.ensureSystemProxyEnabled();
+    if (Platform.isWindows) {
+      await service.ensureWindowsProxyReadyAndEnabled();
+    }
     final mode = await service.getMode(
       forceRefresh: forceRefresh || Platform.isIOS,
     );

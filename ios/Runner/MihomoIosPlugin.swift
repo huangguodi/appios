@@ -1,6 +1,7 @@
 import Flutter
 import Foundation
 import NetworkExtension
+import UIKit
 
 final class MihomoIosPlugin {
   static let shared = MihomoIosPlugin()
@@ -543,9 +544,36 @@ final class TrafficStreamHandler: NSObject, FlutterStreamHandler {
   private var isFetching = false
   private var lastEmittedUp: Int64?
   private var lastEmittedDown: Int64?
+  private var isAppActive = false
 
   init(plugin: MihomoIosPlugin) {
     self.plugin = plugin
+    super.init()
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleAppDidBecomeActive),
+      name: UIApplication.didBecomeActiveNotification,
+      object: nil
+    )
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleAppWillResignActive),
+      name: UIApplication.willResignActiveNotification,
+      object: nil
+    )
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleAppWillResignActive),
+      name: UIApplication.didEnterBackgroundNotification,
+      object: nil
+    )
+    DispatchQueue.main.async {
+      self.isAppActive = UIApplication.shared.applicationState == .active
+    }
+  }
+
+  deinit {
+    NotificationCenter.default.removeObserver(self)
   }
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
@@ -553,9 +581,9 @@ final class TrafficStreamHandler: NSObject, FlutterStreamHandler {
     lastEmittedUp = nil
     lastEmittedDown = nil
     DispatchQueue.main.async {
-      self.timer?.invalidate()
-      self.emitTraffic()
-      self.timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+      self.isAppActive = UIApplication.shared.applicationState == .active
+      self.restartTimerIfNeeded()
+      if self.isAppActive {
         self.emitTraffic()
       }
     }
@@ -573,7 +601,7 @@ final class TrafficStreamHandler: NSObject, FlutterStreamHandler {
   }
 
   private func emitTraffic() {
-    guard sink != nil, !isFetching else {
+    guard sink != nil, isAppActive, !isFetching else {
       return
     }
     isFetching = true
@@ -584,7 +612,7 @@ final class TrafficStreamHandler: NSObject, FlutterStreamHandler {
       let payload = self.resolveTrafficPayload(response: response)
       DispatchQueue.main.async {
         self.isFetching = false
-        guard let sink = self.sink else {
+        guard self.isAppActive, let sink = self.sink else {
           return
         }
         let up = payload["up"] ?? 0
@@ -599,18 +627,45 @@ final class TrafficStreamHandler: NSObject, FlutterStreamHandler {
     }
   }
 
+  @objc private func handleAppDidBecomeActive() {
+    DispatchQueue.main.async {
+      self.isAppActive = true
+      self.restartTimerIfNeeded()
+      self.emitTraffic()
+    }
+  }
+
+  @objc private func handleAppWillResignActive() {
+    DispatchQueue.main.async {
+      self.isAppActive = false
+      self.timer?.invalidate()
+      self.timer = nil
+      self.isFetching = false
+    }
+  }
+
+  private func restartTimerIfNeeded() {
+    timer?.invalidate()
+    timer = nil
+    guard sink != nil, isAppActive else {
+      return
+    }
+    timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+      self.emitTraffic()
+    }
+  }
+
   private func resolveTrafficPayload(response: ProviderMessageResponse?) -> [String: Int64] {
-    if
+    guard
       let data = response?.data,
       let parsed = parseTrafficPayload(data)
-    {
-      return parsed
+    else {
+      return [
+        "up": 0,
+        "down": 0
+      ]
     }
-    let state = plugin?.readSharedState()
-    return [
-      "up": state?.up ?? 0,
-      "down": state?.down ?? 0
-    ]
+    return parsed
   }
 
   private func parseTrafficPayload(_ payload: String) -> [String: Int64]? {
