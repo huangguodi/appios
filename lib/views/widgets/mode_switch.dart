@@ -131,7 +131,7 @@ class _ModeSwitchState extends State<ModeSwitch>
     return LayoutBuilder(
       builder: (context, constraints) {
         final switchWidth = constraints.maxWidth.clamp(300.0, 560.0);
-        final switchHeight = 55.h;
+        final switchHeight = 60.h;
         final sliderWidth = (switchWidth - 18.w) / 3;
 
         return Stack(

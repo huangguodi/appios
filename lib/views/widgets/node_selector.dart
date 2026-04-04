@@ -1,5 +1,3 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -37,7 +35,7 @@ class NodeSelector extends StatelessWidget {
             onTap: () => _showNodeSelectorSheet(context, viewModel),
             borderRadius: BorderRadius.circular(16.r),
             child: Container(
-              height: 36.h,
+              height: 42.h,
               padding: EdgeInsets.symmetric(horizontal: 16.w),
               decoration: BoxDecoration(
                 color: AppColors.cardBackground.withValues(alpha: 0.38),
@@ -112,25 +110,20 @@ class NodeSelector extends StatelessWidget {
 
   Widget _buildCountryIcon(String country) {
     final countryCode = _countryCodeFor(country);
-    // Windows 平台 Emoji 渲染支持较差，使用 SVG 旗帜包替代
-    if (!kIsWeb && Platform.isWindows) {
-      return SizedBox(
-        width: 24.w,
-        height: 14.h,
-        child: CountryFlag.fromCountryCode(
-          countryCode,
-          shape: RoundedRectangle(6.r),
-        ),
-      );
-    }
-
     return SizedBox(
       width: 24.w,
-      height: 14.h,
+      height: 12.h,
       child: Center(
-        child: Text(
-          _flagEmojiFromCode(countryCode),
-          style: TextStyle(fontSize: 24.sp, height: 1),
+        child: FittedBox(
+          fit: BoxFit.contain,
+          child: SizedBox(
+            width: 24.w,
+            height: 12.h,
+            child: CountryFlag.fromCountryCode(
+              countryCode,
+              shape: RoundedRectangle(6.r),
+            ),
+          ),
         ),
       ),
     );
@@ -211,14 +204,6 @@ class NodeSelector extends StatelessWidget {
     if (compact.length == 2) return compact;
 
     return 'un';
-  }
-
-  String _flagEmojiFromCode(String code) {
-    final upper = code.toUpperCase();
-    if (!RegExp(r'^[A-Z]{2}$').hasMatch(upper)) return '🌐';
-    const base = 127397;
-    return String.fromCharCode(upper.codeUnitAt(0) + base) +
-        String.fromCharCode(upper.codeUnitAt(1) + base);
   }
 
   Future<void> _showNodeSelectorSheet(
