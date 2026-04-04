@@ -48,6 +48,11 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   private var lastTunOpenInvoked = false
   private var lastTunOpenFD: Int64 = 0
   private var lastTunOpenError: String?
+  private var activeConfigFileName = ""
+  private var lastKnownPhysicalNetworkType: PhysicalNetworkType = .unknown
+  private var lastObservedPhysicalNetworkType: PhysicalNetworkType = .unknown
+  private var lastObservedPhysicalInterfaceName: String?
+  private var lastAggressiveRefreshAt: TimeInterval = 0
   private var defaultAppGroupId: String {
     if let configuredAppGroupId = configValue(for: AppConfigKey.appGroupId) {
       return configuredAppGroupId
@@ -74,6 +79,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     var disableICMPForwarding: Bool = false
     var name: String = ""
     var stack: String = ""
+  }
+
+  private enum PhysicalNetworkType {
+    case wifi
+    case cellular
+    case other
+    case unknown
   }
 
   private func configValue(for key: String) -> String? {
@@ -106,7 +118,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         ? (providerConfig["sessionId"] as? String)!.trimmingCharacters(in: .whitespacesAndNewlines)
         : UUID().uuidString
       _ = try validateSharedRuntimeDirectory(appGroupId: appGroupId)
-      prepareForStart(sessionId: sessionId)
+      prepareForStart(sessionId: sessionId, configFileName: configFileName)
       let timeoutError = NSError(domain: "PacketTunnel", code: -10, userInfo: [
         NSLocalizedDescriptionKey: "startTunnel timeout"
       ])
@@ -249,9 +261,14 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     tunOpenStateLock.unlock()
   }
 
-  private func prepareForStart(sessionId: String) {
+  private func prepareForStart(sessionId: String, configFileName: String) {
     currentSessionId = sessionId
+    activeConfigFileName = configFileName
     started = false
+    lastObservedPhysicalNetworkType = .unknown
+    lastObservedPhysicalInterfaceName = nil
+    lastAggressiveRefreshAt = 0
+    lastKnownPhysicalNetworkType = .unknown
     stopSharedStateTimer()
     lastPersistedTrafficSnapshot = .empty
     lastPersistedTrafficAt = 0
@@ -264,8 +281,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     MobileClearSocketProtector()
     tunOpener = nil
     socketProtector = nil
+    activeConfigFileName = ""
     stopSharedStateTimer()
     started = false
+    lastObservedPhysicalNetworkType = .unknown
+    lastObservedPhysicalInterfaceName = nil
+    lastAggressiveRefreshAt = 0
+    lastKnownPhysicalNetworkType = .unknown
     resetTrafficSampling()
   }
 
@@ -751,29 +773,106 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     guard !interfaces.isEmpty else {
       return nil
     }
-    if let index = resolveInterfaceIndex(
-      from: interfaces,
-      matchingPrefixes: ["en"]
-    ) {
-      return index
-    }
-    if let index = resolveInterfaceIndex(
-      from: interfaces,
-      matchingPrefixes: ["pdp_ip", "pdp-ip"]
-    ) {
-      return index
-    }
-    if let index = resolveInterfaceIndex(
-      from: interfaces,
-      matchingPrefixes: ["en", "pdp_ip", "pdp-ip", "bridge"]
-    ) {
-      return index
+
+    let resolution = resolvePreferredPhysicalInterface(from: interfaces)
+    if let resolvedName = resolution.name,
+       let resolvedIndex = interfaceIndex(named: resolvedName) {
+      return resolvedIndex
     }
     if let fallback = interfaces.first,
        let index = interfaceIndex(named: fallback) {
       return index
     }
     return nil
+  }
+
+  private func resolvePreferredPhysicalInterface(from interfaces: [String]) -> (type: PhysicalNetworkType, name: String?) {
+    let networkType = resolveCurrentPhysicalNetworkType(from: interfaces)
+    for prefixes in preferredInterfacePrefixes(for: networkType) {
+      if let name = resolveInterfaceName(
+        from: interfaces,
+        matchingPrefixes: prefixes
+      ) {
+        return (networkType, name)
+      }
+    }
+    return (networkType, interfaces.first)
+  }
+
+  private func resolveCurrentPhysicalNetworkType(from interfaces: [String]) -> PhysicalNetworkType {
+    if let path = defaultPath, path.status == .satisfied {
+      if path.usesInterfaceType(.cellular) {
+        lastKnownPhysicalNetworkType = .cellular
+        return .cellular
+      }
+      if path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet) {
+        lastKnownPhysicalNetworkType = .wifi
+        return .wifi
+      }
+      if path.usesInterfaceType(.other) {
+        lastKnownPhysicalNetworkType = .other
+        return .other
+      }
+    }
+
+    let hasWiFiLikeInterface = containsInterface(
+      in: interfaces,
+      matchingPrefixes: ["en"]
+    )
+    let hasCellularInterface = containsInterface(
+      in: interfaces,
+      matchingPrefixes: ["pdp_ip", "pdp-ip"]
+    )
+    let hasOtherInterface = containsInterface(
+      in: interfaces,
+      matchingPrefixes: ["bridge"]
+    )
+
+    if hasCellularInterface, !hasWiFiLikeInterface {
+      lastKnownPhysicalNetworkType = .cellular
+      return .cellular
+    }
+    if hasWiFiLikeInterface, !hasCellularInterface {
+      lastKnownPhysicalNetworkType = .wifi
+      return .wifi
+    }
+    if hasOtherInterface, !hasWiFiLikeInterface, !hasCellularInterface {
+      lastKnownPhysicalNetworkType = .other
+      return .other
+    }
+    if lastKnownPhysicalNetworkType != .unknown {
+      return lastKnownPhysicalNetworkType
+    }
+    return .unknown
+  }
+
+  private func preferredInterfacePrefixes(for networkType: PhysicalNetworkType) -> [[String]] {
+    switch networkType {
+    case .cellular:
+      return [
+        ["pdp_ip", "pdp-ip"],
+        ["en"],
+        ["bridge"]
+      ]
+    case .wifi:
+      return [
+        ["en"],
+        ["pdp_ip", "pdp-ip"],
+        ["bridge"]
+      ]
+    case .other:
+      return [
+        ["bridge"],
+        ["en"],
+        ["pdp_ip", "pdp-ip"]
+      ]
+    case .unknown:
+      return [
+        ["en"],
+        ["pdp_ip", "pdp-ip"],
+        ["bridge"]
+      ]
+    }
   }
 
   private func activeInterfaceNames() -> [String] {
@@ -807,12 +906,28 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     return result
   }
 
-  private func resolveInterfaceIndex(from names: [String], matchingPrefixes prefixes: [String]) -> UInt32? {
-    for prefix in prefixes {
-      if let name = names.first(where: { $0.lowercased().hasPrefix(prefix.lowercased()) }),
-         let index = interfaceIndex(named: name) {
-        return index
+  private func containsInterface(in names: [String], matchingPrefixes prefixes: [String]) -> Bool {
+    names.contains { name in
+      let lowercased = name.lowercased()
+      return prefixes.contains { prefix in
+        lowercased.hasPrefix(prefix.lowercased())
       }
+    }
+  }
+
+  private func resolveInterfaceName(from names: [String], matchingPrefixes prefixes: [String]) -> String? {
+    for prefix in prefixes {
+      if let name = names.first(where: { $0.lowercased().hasPrefix(prefix.lowercased()) }) {
+        return name
+      }
+    }
+    return nil
+  }
+
+  private func resolveInterfaceIndex(from names: [String], matchingPrefixes prefixes: [String]) -> UInt32? {
+    if let name = resolveInterfaceName(from: names, matchingPrefixes: prefixes),
+       let index = interfaceIndex(named: name) {
+      return index
     }
     return nil
   }
@@ -956,6 +1071,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     let timer = DispatchSource.makeTimerSource(queue: actionQueue)
     timer.schedule(deadline: .now(), repeating: 1.0, leeway: .milliseconds(200))
     timer.setEventHandler { [weak self] in
+      self?.handleAggressiveConnectionRefreshIfNeeded(appGroupId: appGroupId)
       self?.refreshSharedStateHeartbeat(appGroupId: appGroupId)
     }
     sharedStateTimer = timer
@@ -1180,6 +1296,55 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       state.updatedAt = Date().timeIntervalSince1970
       state.lastError = nil
     }
+  }
+
+  private func handleAggressiveConnectionRefreshIfNeeded(appGroupId: String) {
+    guard started else {
+      return
+    }
+
+    let interfaces = activeInterfaceNames()
+    let resolution = resolvePreferredPhysicalInterface(from: interfaces)
+    let currentType = resolution.type
+    let currentInterfaceName = resolution.name
+    let previousType = lastObservedPhysicalNetworkType
+    let previousInterfaceName = lastObservedPhysicalInterfaceName
+
+    if currentType != .unknown {
+      lastObservedPhysicalNetworkType = currentType
+    }
+    if let currentInterfaceName, !currentInterfaceName.isEmpty {
+      lastObservedPhysicalInterfaceName = currentInterfaceName
+    }
+
+    let typeChanged =
+      previousType != .unknown &&
+      currentType != .unknown &&
+      previousType != currentType
+    let interfaceChanged =
+      previousInterfaceName != nil &&
+      currentInterfaceName != nil &&
+      previousInterfaceName != currentInterfaceName
+
+    guard typeChanged || interfaceChanged else {
+      return
+    }
+
+    let now = Date().timeIntervalSince1970
+    guard now - lastAggressiveRefreshAt >= 3.0 else {
+      return
+    }
+    lastAggressiveRefreshAt = now
+
+    resetTrafficSampling()
+    if !activeConfigFileName.isEmpty {
+      MobileForceUpdateConfig(activeConfigFileName)
+    }
+    refreshSharedState(
+      appGroupId: appGroupId,
+      sessionId: currentSessionId,
+      includeProxies: false
+    )
   }
 
   private func persistRunningState(appGroupId: String, sessionId: String) {
