@@ -43,7 +43,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   private let tunOpenStateLock = NSLock()
   private var started = false
   private var currentSessionId = ""
-  private var pathMonitor: NWPathMonitor?
+  private var pathMonitor: Network.NWPathMonitor?
   private var sharedStateTimer: DispatchSourceTimer?
   private var lastPersistedTrafficSnapshot = TrafficSnapshot.empty
   private var lastPersistedTrafficAt: TimeInterval = 0
@@ -88,13 +88,6 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     var disableICMPForwarding: Bool = false
     var name: String = ""
     var stack: String = ""
-  }
-
-  private enum PhysicalNetworkType {
-    case wifi
-    case cellular
-    case other
-    case unknown
   }
 
   private func configValue(for key: String) -> String? {
@@ -851,7 +844,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
   private func startPathMonitor() {
     stopPathMonitor()
-    let monitor = NWPathMonitor()
+    let monitor = Network.NWPathMonitor()
     monitor.pathUpdateHandler = { [weak self] path in
       guard let strongSelf = self else {
         return
@@ -867,14 +860,14 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     pathMonitor = nil
   }
 
-  private func physicalNetworkType(from path: NWPath) -> PhysicalNetworkType {
+  private func physicalNetworkType(from path: Network.NWPath) -> PhysicalNetworkType {
     guard path.status == .satisfied else {
       return .unknown
     }
-    if path.usesInterfaceType(.cellular) {
+    if path.usesInterfaceType(Network.NWInterface.InterfaceType.cellular) {
       return .cellular
     }
-    if path.usesInterfaceType(.wifi) {
+    if path.usesInterfaceType(Network.NWInterface.InterfaceType.wifi) {
       return .wifi
     }
     return .other
