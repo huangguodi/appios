@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import 'package:app/core/constants.dart';
 import 'package:app/core/utils.dart';
@@ -21,16 +22,16 @@ class TrafficPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
       decoration: BoxDecoration(
         color: AppColors.cardBackground.withValues(alpha: 0.42),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(20.r),
         border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
+            blurRadius: 14.r,
+            offset: Offset(0, 6.h),
           ),
         ],
       ),
@@ -47,28 +48,36 @@ class TrafficPanel extends StatelessWidget {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.south_east, color: Colors.redAccent, size: 16),
-                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.south_east,
+                          color: Colors.redAccent,
+                          size: 16.sp,
+                        ),
+                        SizedBox(width: 6.w),
                         Text(
                           speeds.$2, // Download
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 15,
+                            fontSize: 15.sp,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 1),
+                    SizedBox(height: 1.h),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.north_east, color: Colors.greenAccent, size: 16),
-                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.north_east,
+                          color: Colors.greenAccent,
+                          size: 16.sp,
+                        ),
+                        SizedBox(width: 6.w),
                         Text(
                           speeds.$1, // Upload
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 14,
+                            fontSize: 14.sp,
                           ),
                         ),
                       ],
@@ -86,28 +95,37 @@ class TrafficPanel extends StatelessWidget {
                   selector: (_, vm) => vm.quotaBytes,
                   builder: (context, quota, child) {
                     final hasQuota = quota > 0;
-                    final quotaText = hasQuota ? _formatQuotaValue(quota) : "0B  ";
+                    final quotaText = hasQuota
+                        ? _formatQuotaValue(quota)
+                        : "0B  ";
                     return Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.data_usage_rounded, color: Colors.amber.shade300, size: 16),
-                        const SizedBox(width: 2),
+                        Icon(
+                          Icons.data_usage_rounded,
+                          color: Colors.amber.shade300,
+                          size: 16.sp,
+                        ),
+                        SizedBox(width: 2.w),
                         Text(
                           quotaText,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 14,
+                            fontSize: 14.sp,
                           ),
                         ),
                       ],
                     );
                   },
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2.h),
                 GestureDetector(
                   onTap: onPurchaseTap,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 10.w,
+                      vertical: 4.h,
+                    ),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
@@ -115,27 +133,29 @@ class TrafficPanel extends StatelessWidget {
                           Colors.white.withValues(alpha: 0.1),
                         ],
                       ),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF96CBFF).withValues(alpha: 0.26)),
+                      borderRadius: BorderRadius.circular(12.r),
+                      border: Border.all(
+                        color: const Color(0xFF96CBFF).withValues(alpha: 0.26),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Flexible(
+                        Flexible(
                           child: Text(
                             " 购买流量包",
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 11,
+                              fontSize: 11.sp,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        const Icon(
+                        SizedBox(width: 6.w),
+                        Icon(
                           Icons.arrow_forward_ios,
-                          size: 11,
+                          size: 11.sp,
                           color: Colors.white,
                         ),
                       ],

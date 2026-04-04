@@ -7,6 +7,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image/image.dart' as img;
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -157,26 +158,26 @@ class _HomePageContentState extends State<_HomePageContent>
               children: [
                 RepaintBoundary(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 10,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 20.w,
+                      vertical: 10.h,
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         SizedBox(
-                          width: 76,
+                          width: 76.w,
                           child: Align(
                             alignment: Alignment.topLeft,
                             child: Padding(
-                              padding: const EdgeInsets.only(top: 12.0),
+                              padding: EdgeInsets.only(top: 12.h),
                               child: GestureDetector(
                                 onTap: () => TicketDialog.show(context),
                                 child: SvgPicture.asset(
                                   AppAssets.icSupport,
-                                  width: 24,
-                                  height: 24,
+                                  width: 24.w,
+                                  height: 24.w,
                                   colorFilter: const ColorFilter.mode(
                                     Color.fromARGB(255, 255, 255, 255),
                                     BlendMode.srcIn,
@@ -187,7 +188,7 @@ class _HomePageContentState extends State<_HomePageContent>
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.only(top: 15.0),
+                          padding: EdgeInsets.only(top: 15.h),
                           child: Hero(
                             tag: 'app_logo',
                             flightShuttleBuilder:
@@ -213,16 +214,16 @@ class _HomePageContentState extends State<_HomePageContent>
                               color: Colors.transparent,
                               child: Image.asset(
                                 AppAssets.resolveImage(context, 'logo.png'),
-                                width: 40,
-                                height: 40,
+                                width: 40.w,
+                                height: 40.w,
                               ),
                             ),
                           ),
                         ),
                         SizedBox(
-                          width: 76,
+                          width: 76.w,
                           child: Padding(
-                            padding: const EdgeInsets.only(top: 12.0),
+                            padding: EdgeInsets.only(top: 12.h),
                             child: Selector<HomeViewModel, bool>(
                               selector: (_, vm) => vm.isDeviceBound,
                               builder: (context, isDeviceBound, child) {
@@ -231,26 +232,26 @@ class _HomePageContentState extends State<_HomePageContent>
                                   children: [
                                     if (!isDeviceBound) ...[
                                       GestureDetector(
-                                        onTap:
-                                            () => DeviceBindDialog.show(context),
+                                        onTap: () =>
+                                            DeviceBindDialog.show(context),
                                         child: SvgPicture.asset(
                                           AppAssets.icQrCode,
-                                          width: 24,
-                                          height: 24,
+                                          width: 24.w,
+                                          height: 24.w,
                                           colorFilter: const ColorFilter.mode(
                                             Colors.white,
                                             BlendMode.srcIn,
                                           ),
                                         ),
                                       ),
-                                      const SizedBox(width: 12),
+                                      SizedBox(width: 12.w),
                                     ],
                                     GestureDetector(
                                       onTap: () => InviteDialog.show(context),
                                       child: SvgPicture.asset(
                                         AppAssets.icInvite,
-                                        width: 24,
-                                        height: 24,
+                                        width: 24.w,
+                                        height: 24.w,
                                         colorFilter: const ColorFilter.mode(
                                           Colors.white,
                                           BlendMode.srcIn,
@@ -274,9 +275,9 @@ class _HomePageContentState extends State<_HomePageContent>
                     return AnimatedSwitcher(
                       duration: const Duration(milliseconds: 220),
                       child: connectionMode == ConnectionMode.global
-                          ? const Padding(
+                          ? Padding(
                               key: ValueKey('global-node-button'),
-                              padding: EdgeInsets.symmetric(horizontal: 22),
+                              padding: EdgeInsets.symmetric(horizontal: 22.w),
                               child: RepaintBoundary(child: NodeSelector()),
                             )
                           : const SizedBox.shrink(
@@ -285,19 +286,19 @@ class _HomePageContentState extends State<_HomePageContent>
                     );
                   },
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: 4.h),
                 RepaintBoundary(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    padding: EdgeInsets.symmetric(horizontal: 18.w),
                     child: TrafficPanel(
                       onPurchaseTap: () => TrafficPurchaseDialog.show(context),
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 6.h),
                 RepaintBoundary(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: EdgeInsets.symmetric(horizontal: 8.w),
                     child: Selector<HomeViewModel, (ConnectionMode, bool)>(
                       selector: (_, vm) => (vm.connectionMode, vm.isSwitching),
                       builder: (context, modeState, child) {
@@ -315,12 +316,12 @@ class _HomePageContentState extends State<_HomePageContent>
                   builder: (context, adsState, child) {
                     final ads = context.read<HomeViewModel>().ads;
                     if (ads.isEmpty) {
-                      return const SizedBox(height: 20);
+                      return SizedBox(height: 20.h);
                     }
                     return Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const SizedBox(height: 6),
+                        SizedBox(height: 6.h),
                         RepaintBoundary(
                           child: _AdBannerCarousel(
                             ads: ads,
@@ -348,8 +349,8 @@ class _HomePageContentState extends State<_HomePageContent>
             },
           ),
           Positioned(
-            left: 14,
-            bottom: 8,
+            left: 14.w,
+            bottom: 8.h,
             child: Selector<HomeViewModel, (String?, String?, bool)>(
               selector: (_, vm) => (
                 vm.iosVpnStatusText,
@@ -371,21 +372,21 @@ class _HomePageContentState extends State<_HomePageContent>
                       text,
                       style: TextStyle(
                         color: canRetry ? Colors.white70 : Colors.white54,
-                        fontSize: 10.5,
+                        fontSize: 10.5.sp,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                     if (detail != null && detail.isNotEmpty) ...[
-                      const SizedBox(height: 2),
+                      SizedBox(height: 2.h),
                       ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 210),
+                        constraints: BoxConstraints(maxWidth: 210.w),
                         child: Text(
                           detail,
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white54,
-                            fontSize: 9.5,
+                            fontSize: 9.5.sp,
                             fontWeight: FontWeight.w400,
                             height: 1.25,
                           ),
@@ -1046,10 +1047,13 @@ class _InviteDialogContentState extends State<_InviteDialogContent> {
     final inviteInfo = _inviteInfo!;
     final canCopyGiftCode = inviteInfo.giftCode.trim().isNotEmpty;
     final canCopyContent = inviteInfo.content.trim().isNotEmpty;
-    final hasAndroidDownloadUrl = inviteInfo.androidDownloadUrl.trim().isNotEmpty;
+    final hasAndroidDownloadUrl = inviteInfo.androidDownloadUrl
+        .trim()
+        .isNotEmpty;
     final hasIosDownloadUrl = inviteInfo.iosDownloadUrl.trim().isNotEmpty;
-    final hasWindowsDownloadUrl =
-        inviteInfo.windowsDownloadUrl.trim().isNotEmpty;
+    final hasWindowsDownloadUrl = inviteInfo.windowsDownloadUrl
+        .trim()
+        .isNotEmpty;
     final inviteRewardGb = inviteInfo.inviteCount * 10;
     return ScrollConfiguration(
       behavior: MaterialScrollBehavior().copyWith(
@@ -1098,7 +1102,7 @@ class _InviteDialogContentState extends State<_InviteDialogContent> {
             isCopied: _isCopied('invite_content'),
           ),
           if (hasAndroidDownloadUrl) ...[
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
             _buildInfoCard(
               title: '安卓下载地址',
               value: inviteInfo.androidDownloadUrl,
@@ -1112,21 +1116,19 @@ class _InviteDialogContentState extends State<_InviteDialogContent> {
             ),
           ],
           if (hasIosDownloadUrl) ...[
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
             _buildInfoCard(
               title: '苹果下载地址',
               value: inviteInfo.iosDownloadUrl,
               copyLabel: _isCopied('download_url_ios') ? '已复制' : '复制',
               hidePreview: true,
-              onCopy: () => _copyText(
-                'download_url_ios',
-                inviteInfo.iosDownloadUrl,
-              ),
+              onCopy: () =>
+                  _copyText('download_url_ios', inviteInfo.iosDownloadUrl),
               isCopied: _isCopied('download_url_ios'),
             ),
           ],
           if (hasWindowsDownloadUrl) ...[
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
             _buildInfoCard(
               title: '电脑下载地址',
               value: inviteInfo.windowsDownloadUrl,

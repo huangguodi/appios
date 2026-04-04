@@ -1,5 +1,6 @@
 import 'package:app/core/constants.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 /// 显示一个带有缩放和淡入淡出动画的通用弹窗
 Future<T?> showAnimatedDialog<T>({
@@ -57,22 +58,22 @@ Future<void> showGlobalMessageDialog({
       return AlertDialog(
         backgroundColor: AppColors.cardBackground,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: Color(0xFF96CBFF), width: 1.1),
+          borderRadius: BorderRadius.circular(14.r),
+          side: BorderSide(color: const Color(0xFF96CBFF), width: 1.1.w),
         ),
         title: Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.white,
-            fontSize: 20,
+            fontSize: 20.sp,
             fontWeight: FontWeight.w700,
           ),
         ),
         content: Text(
           message,
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.white70,
-            fontSize: 14,
+            fontSize: 14.sp,
             height: 1.5,
             fontWeight: FontWeight.w500,
           ),

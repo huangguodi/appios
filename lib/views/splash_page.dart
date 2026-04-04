@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:app/services/api_service.dart';
 import 'package:app/services/hot_update_service.dart';
 import 'package:app/services/mihomo_service.dart';
@@ -168,7 +169,9 @@ class _SplashPageState extends State<SplashPage> {
       );
       if (!mounted) return false;
       if (!hasNetwork) {
-        AppLogger.w('Splash: skip hot update because startup network wait timed out');
+        AppLogger.w(
+          'Splash: skip hot update because startup network wait timed out',
+        );
         _clearStartupNetworkWaiting();
         _setHotUpdateProgress(null);
         return true;
@@ -286,8 +289,7 @@ class _SplashPageState extends State<SplashPage> {
         _clearStartupNetworkWaiting();
         return true;
       }
-      if (maxWait != null &&
-          DateTime.now().difference(startedAt) >= maxWait) {
+      if (maxWait != null && DateTime.now().difference(startedAt) >= maxWait) {
         AppLogger.w('Splash: startup network wait timed out before $stage');
         return false;
       }
@@ -542,42 +544,42 @@ class _SplashPageState extends State<SplashPage> {
                     ),
                     SafeArea(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 22,
-                          vertical: 22,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 22.w,
+                          vertical: 22.h,
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const SizedBox(height: 28),
-                            const Text(
+                            SizedBox(height: 28.h),
+                            Text(
                               '礼品卡兑换',
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 26,
+                                fontSize: 26.sp,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            const SizedBox(height: 9),
-                            const Text(
+                            SizedBox(height: 9.h),
+                            Text(
                               '您将获得 100GB流量包,有效期5天，流量实时到账，立即生效使用',
                               style: TextStyle(
                                 color: Colors.white70,
-                                fontSize: 13,
+                                fontSize: 13.sp,
                                 height: 1.4,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const SizedBox(height: 7),
-                            const Text(
+                            SizedBox(height: 7.h),
+                            Text(
                               '获取方案：请联系推荐人获取礼品卡密',
                               style: TextStyle(
                                 color: Colors.white54,
-                                fontSize: 12,
+                                fontSize: 12.sp,
                                 height: 1.6,
                               ),
                             ),
-                            const SizedBox(height: 24),
+                            SizedBox(height: 24.h),
                             Row(
                               children: [
                                 Expanded(
@@ -585,21 +587,24 @@ class _SplashPageState extends State<SplashPage> {
                                     controller: controller,
                                     enabled: !isSubmitting,
                                     onChanged: (_) => setState(() {}),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 14,
+                                      fontSize: 14.sp,
                                     ),
                                     decoration: InputDecoration(
                                       hintText: '礼品卡密',
-                                      hintStyle: const TextStyle(
+                                      hintStyle: TextStyle(
                                         color: Colors.white38,
+                                        fontSize: 14.sp,
                                       ),
                                       filled: true,
                                       fillColor: Colors.white.withValues(
                                         alpha: 0.09,
                                       ),
                                       enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(
+                                          12.r,
+                                        ),
                                         borderSide: BorderSide(
                                           color: Colors.white.withValues(
                                             alpha: 0.24,
@@ -607,19 +612,21 @@ class _SplashPageState extends State<SplashPage> {
                                         ),
                                       ),
                                       focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
+                                        borderRadius: BorderRadius.circular(
+                                          12.r,
+                                        ),
+                                        borderSide: BorderSide(
                                           color: Color(0xFF96CBFF),
-                                          width: 1.2,
+                                          width: 1.2.w,
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
+                                SizedBox(width: 10.w),
                                 SizedBox(
-                                  width: 33,
-                                  height: 48,
+                                  width: 56.w,
+                                  height: 48.h,
                                   child: OutlinedButton.icon(
                                     onPressed: isSubmitting
                                         ? null
@@ -643,18 +650,23 @@ class _SplashPageState extends State<SplashPage> {
                                           },
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: const Color(0xFF96CBFF),
-                                      side: const BorderSide(
+                                      side: BorderSide(
                                         color: Color(0xFF96CBFF),
-                                        width: 1,
+                                        width: 1.w,
                                       ),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(
+                                          12.r,
+                                        ),
                                       ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 10.w,
                                       ),
                                     ),
-                                    label: const Text('粘贴'),
+                                    label: Text(
+                                      '粘贴',
+                                      style: TextStyle(fontSize: 13.sp),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -707,26 +719,24 @@ class _SplashPageState extends State<SplashPage> {
                                   ).withValues(alpha: 0.7),
                                   disabledForegroundColor: Colors.black54,
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
+                                    borderRadius: BorderRadius.circular(14.r),
                                   ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
+                                  padding: EdgeInsets.symmetric(vertical: 14.h),
                                   elevation: 0,
                                 ),
                                 child: isSubmitting
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
+                                    ? SizedBox(
+                                        width: 18.w,
+                                        height: 18.w,
                                         child: CircularProgressIndicator(
-                                          strokeWidth: 2.2,
+                                          strokeWidth: 2.2.w,
                                           color: Colors.black87,
                                         ),
                                       )
-                                    : const Text(
+                                    : Text(
                                         '兑换',
                                         style: TextStyle(
-                                          fontSize: 18,
+                                          fontSize: 18.sp,
                                           fontWeight: FontWeight.w700,
                                           color: Colors.black,
                                         ),
@@ -780,13 +790,20 @@ class _SplashPageState extends State<SplashPage> {
           AppLogger.d('Splash: existing Windows mihomo ready=$ready');
         }
         if (ready) {
-          final proxyEnsured = await MihomoService().ensureSystemProxyEnabled();
+          final proxyEnsured = await MihomoService()
+              .ensureWindowsProxyReadyAndEnabled();
           AppLogger.d(
             'Splash: reusing existing mihomo tunnel proxyReady=$proxyEnsured',
           );
+          if (!proxyEnsured) {
+            await MihomoService().stop();
+            return 'system proxy not ready';
+          }
           return null;
         }
-        AppLogger.w('Splash: existing Windows mihomo state is stale, restarting');
+        AppLogger.w(
+          'Splash: existing Windows mihomo state is stale, restarting',
+        );
         await MihomoService().stop();
         await Future.delayed(const Duration(milliseconds: 300));
       }
@@ -807,6 +824,14 @@ class _SplashPageState extends State<SplashPage> {
               timeout: const Duration(milliseconds: 900),
             );
             if (running) {
+              if (Platform.isWindows) {
+                final proxyEnsured = await MihomoService()
+                    .ensureWindowsProxyReadyAndEnabled();
+                if (!proxyEnsured) {
+                  await MihomoService().stop();
+                  return 'system proxy not ready';
+                }
+              }
               AppLogger.d('Splash: mihomo running after ${i + 1} probes');
               return null;
             }
@@ -814,10 +839,12 @@ class _SplashPageState extends State<SplashPage> {
           }
           AppLogger.e('Splash: mihomo running probe timeout');
           if (Platform.isWindows) {
-            final nativeLogDetails = await MihomoService().buildNativeLogDetails(
-              title: '最近 Windows Mihomo 日志',
-              maxLines: 20,
-            );
+            await MihomoService().stop();
+            final nativeLogDetails = await MihomoService()
+                .buildNativeLogDetails(
+                  title: '最近 Windows Mihomo 日志',
+                  maxLines: 20,
+                );
             if (nativeLogDetails.isNotEmpty) {
               AppLogger.e(nativeLogDetails);
             }
@@ -1215,7 +1242,10 @@ class _SplashPageState extends State<SplashPage> {
               onPressed: _isRetryingStartup ? null : _retryStartup,
               style: TextButton.styleFrom(
                 foregroundColor: const Color(0xFF96CBFF),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 visualDensity: VisualDensity.compact,
@@ -1234,17 +1264,17 @@ class _SplashPageState extends State<SplashPage> {
                 onPressed: _showStartupDebugLogDialog,
                 style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFF96CBFF),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   visualDensity: VisualDensity.compact,
                 ),
                 child: const Text(
                   '查看调试日志',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -1269,13 +1299,13 @@ class _SplashPageState extends State<SplashPage> {
             style: TextStyle(color: Colors.white),
           ),
           content: SizedBox(
-            width: 560,
+            width: 560.w,
             child: SingleChildScrollView(
               child: SelectableText(
                 logText,
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white70,
-                  fontSize: 12,
+                  fontSize: 12.sp,
                   height: 1.45,
                 ),
               ),
@@ -1327,8 +1357,8 @@ class _SplashPageState extends State<SplashPage> {
                 AnimatedSize(
                   duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOutCubic,
-                  child: _hotUpdateProgress == null &&
-                          _startupFailureTitle == null
+                  child:
+                      _hotUpdateProgress == null && _startupFailureTitle == null
                       ? const SizedBox(height: 0)
                       : const SizedBox(height: 26),
                 ),

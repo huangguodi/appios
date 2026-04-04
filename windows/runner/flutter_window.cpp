@@ -1158,9 +1158,6 @@ bool FlutterWindow::OnCreate() {
          if (call.method_name() == "initAssets") {
             result->Success();
          } else if (call.method_name() == "start") {
-            if (!StartNativeLogCapture()) {
-              RunnerLog("native log capture unavailable");
-            }
             if (!EnsureMihomoApi()) {
               result->Error("DLL_LOAD_FAILED", "Failed to load mihomo.dll", nullptr);
               return;
@@ -1225,12 +1222,6 @@ bool FlutterWindow::OnCreate() {
                                     ? start_result
                                     : (last_error.empty() ? "Start failed"
                                                           : last_error);
-              } else if (!ApplySystemProxy(true)) {
-                RunnerLog(
-                    "start failed because system proxy enable returned false");
-                g_api.stop();
-                error_code = "PROXY_SETUP_FAILED";
-                error_message = "Failed to enable system proxy";
               } else {
                 const std::string mode = TakeCString(g_api.get_mode());
                 RunnerLog(

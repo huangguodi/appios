@@ -7,6 +7,7 @@ import 'package:app/services/hot_update_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:window_manager/window_manager.dart';
 import 'services/tray_service.dart';
 import 'views/splash_page.dart';
@@ -16,9 +17,11 @@ const MethodChannel _securityChannel = MethodChannel(
 );
 const Duration _securityWatchdogInterval = Duration(seconds: 5);
 const Duration _initialSecurityWatchdogDelay = Duration(seconds: 4);
-bool get _useWindowsTrayBehavior => !kDebugMode;
+const bool _useWindowsTrayBehavior = true;
 Timer? _securityWatchdog;
 bool _isSecurityCheckInFlight = false;
+
+bool get _shouldEnforceRuntimeSecurity => !kDebugMode;
 
 class _DirectOnlyHttpOverrides extends HttpOverrides {
   @override
@@ -30,12 +33,17 @@ class _DirectOnlyHttpOverrides extends HttpOverrides {
 }
 
 Future<void> _enforceSecurity() async {
-  if (!kIsWeb && !kDebugMode) {
+  if (!kIsWeb && (Platform.isWindows || !kDebugMode)) {
     HttpOverrides.global = _DirectOnlyHttpOverrides();
   }
   final isSupportedPlatform =
       !kIsWeb && (Platform.isAndroid || Platform.isWindows);
   if (!isSupportedPlatform) {
+    return;
+  }
+  _securityWatchdog?.cancel();
+  if (!_shouldEnforceRuntimeSecurity) {
+    _scheduleNextSecurityCheck(initial: true);
     return;
   }
   try {
@@ -44,12 +52,10 @@ Future<void> _enforceSecurity() async {
         false;
     final isAppDebuggable =
         await _securityChannel.invokeMethod<bool>('isAppDebuggable') ?? false;
-    // REMOVED: isProxyDetected because this is a VPN app and it will detect its own proxy
-    if (!kDebugMode && (isDebuggerAttached || isAppDebuggable)) {
+    if (isDebuggerAttached || isAppDebuggable) {
       await SystemNavigator.pop();
       return;
     }
-    _securityWatchdog?.cancel();
     _scheduleNextSecurityCheck(initial: true);
   } catch (_) {
     // Initial setup error, we can ignore to prevent false positive crashes
@@ -57,36 +63,30 @@ Future<void> _enforceSecurity() async {
 }
 
 void _scheduleNextSecurityCheck({required bool initial}) {
-  _securityWatchdog?.cancel();
-  if (kDebugMode) {
-    AppPollingTaskRegistry.instance.registerTask(
-      id: 'security_watchdog',
-      interval: _securityWatchdogInterval,
-      initialDelay: _initialSecurityWatchdogDelay,
-      owner: 'main',
-      active: false,
-    );
-    return;
-  }
+  final active = _shouldEnforceRuntimeSecurity;
   AppPollingTaskRegistry.instance.registerTask(
     id: 'security_watchdog',
     interval: _securityWatchdogInterval,
     initialDelay: _initialSecurityWatchdogDelay,
     owner: 'main',
-    active: true,
+    active: active,
   );
+  if (!active) {
+    return;
+  }
   final delay = initial
       ? _initialSecurityWatchdogDelay
       : _securityWatchdogInterval;
   _securityWatchdog = Timer(delay, () async {
     await _runSecurityWatchdogCheck();
-    if (!kDebugMode) {
-      _scheduleNextSecurityCheck(initial: false);
-    }
+    _scheduleNextSecurityCheck(initial: false);
   });
 }
 
 Future<void> _runSecurityWatchdogCheck() async {
+  if (!_shouldEnforceRuntimeSecurity) {
+    return;
+  }
   if (_isSecurityCheckInFlight) return;
   _isSecurityCheckInFlight = true;
   try {
@@ -184,6 +184,13 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp>
     with WidgetsBindingObserver, WindowListener {
+  Size get _designSize {
+    if (!kIsWeb && Platform.isWindows) {
+      return const Size(300, 520);
+    }
+    return const Size(360, 800);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -231,17 +238,27 @@ class _MyAppState extends State<MyApp>
   Widget build(BuildContext context) {
     return DefaultAssetBundle(
       bundle: widget.assetBundle,
-      child: MaterialApp(
-        navigatorKey: appNavigatorKey,
-        title: 'VPN App',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF101F2D)),
-          useMaterial3: true,
-          scaffoldBackgroundColor: const Color(0xFF101F2D),
-        ),
-        home: const SplashPage(),
-        builder: (context, child) => child ?? const SizedBox.shrink(),
-        debugShowCheckedModeBanner: false,
+      child: ScreenUtilInit(
+        designSize: _designSize,
+        minTextAdapt: true,
+        splitScreenMode: true,
+        child: const SplashPage(),
+        builder: (context, child) {
+          return MaterialApp(
+            navigatorKey: appNavigatorKey,
+            title: 'VPN App',
+            theme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFF101F2D),
+              ),
+              useMaterial3: true,
+              scaffoldBackgroundColor: const Color(0xFF101F2D),
+            ),
+            home: child ?? const SizedBox.shrink(),
+            builder: (context, appChild) => appChild ?? const SizedBox.shrink(),
+            debugShowCheckedModeBanner: false,
+          );
+        },
       ),
     );
   }

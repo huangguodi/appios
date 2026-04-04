@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:app/core/constants.dart';
 
 class ModeSwitch extends StatefulWidget {
@@ -17,7 +18,8 @@ class ModeSwitch extends StatefulWidget {
   State<ModeSwitch> createState() => _ModeSwitchState();
 }
 
-class _ModeSwitchState extends State<ModeSwitch> with SingleTickerProviderStateMixin {
+class _ModeSwitchState extends State<ModeSwitch>
+    with SingleTickerProviderStateMixin {
   late AnimationController _bounceController;
   late Animation<double> _bounceAnimation;
 
@@ -28,7 +30,10 @@ class _ModeSwitchState extends State<ModeSwitch> with SingleTickerProviderStateM
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _bounceAnimation = Tween<double>(begin: 0, end: 0).animate(_bounceController);
+    _bounceAnimation = Tween<double>(
+      begin: 0,
+      end: 0,
+    ).animate(_bounceController);
   }
 
   @override
@@ -42,10 +47,22 @@ class _ModeSwitchState extends State<ModeSwitch> with SingleTickerProviderStateM
     double targetVal = _getAlignmentValue(targetMode);
     double distance = targetVal - currentVal;
     double peakOffset = distance * 0.3;
-    
+
     _bounceAnimation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: peakOffset).chain(CurveTween(curve: Curves.easeOut)), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: peakOffset, end: 0.0).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 0.0,
+          end: peakOffset,
+        ).chain(CurveTween(curve: Curves.easeOut)),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: peakOffset,
+          end: 0.0,
+        ).chain(CurveTween(curve: Curves.easeIn)),
+        weight: 50,
+      ),
     ]).animate(_bounceController);
 
     _bounceController.reset();
@@ -60,7 +77,7 @@ class _ModeSwitchState extends State<ModeSwitch> with SingleTickerProviderStateM
       }
       return;
     }
-    
+
     // 如果点击的是当前模式，也忽略（避免重复触发）
     if (widget.mode == targetMode) return;
 
@@ -70,15 +87,21 @@ class _ModeSwitchState extends State<ModeSwitch> with SingleTickerProviderStateM
 
   double _getAlignmentValue(ConnectionMode mode) {
     switch (mode) {
-      case ConnectionMode.off: return -1.0;
-      case ConnectionMode.smart: return 0.0;
-      case ConnectionMode.global: return 1.0;
+      case ConnectionMode.off:
+        return -1.0;
+      case ConnectionMode.smart:
+        return 0.0;
+      case ConnectionMode.global:
+        return 1.0;
     }
   }
 
   Alignment _getAlignment() {
     double base = _getAlignmentValue(widget.mode);
-    return Alignment(base + (_bounceController.isAnimating ? _bounceAnimation.value : 0.0), 0.0);
+    return Alignment(
+      base + (_bounceController.isAnimating ? _bounceAnimation.value : 0.0),
+      0.0,
+    );
   }
 
   Color _getModeColor() {
@@ -107,9 +130,9 @@ class _ModeSwitchState extends State<ModeSwitch> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final switchWidth = constraints.maxWidth.clamp(300.0, 560.0); // 允许更小的宽度
-        final switchHeight = 72.0; // 缩小高度适配小窗口
-        final sliderWidth = (switchWidth - 20) / 3;
+        final switchWidth = constraints.maxWidth.clamp(300.0, 560.0);
+        final switchHeight = 55.h;
+        final sliderWidth = (switchWidth - 18.w) / 3;
 
         return Stack(
           alignment: Alignment.center,
@@ -122,21 +145,21 @@ class _ModeSwitchState extends State<ModeSwitch> with SingleTickerProviderStateM
                   width: switchWidth,
                   height: switchHeight,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(20.r),
                     color: AppColors.cardBackground,
                     border: Border.all(
                       color: widget.mode == ConnectionMode.off
                           ? Colors.white.withValues(alpha: 0.1)
                           : _getModeColor(),
-                      width: 2,
+                      width: 1.6.w,
                     ),
                     boxShadow: widget.mode != ConnectionMode.off
                         ? [
                             BoxShadow(
                               color: _getModeColor().withValues(alpha: 0.3),
-                              blurRadius: 20,
-                              spreadRadius: 2,
-                            )
+                              blurRadius: 20.r,
+                              spreadRadius: 2.r,
+                            ),
                           ]
                         : [],
                   ),
@@ -157,7 +180,7 @@ class _ModeSwitchState extends State<ModeSwitch> with SingleTickerProviderStateM
                                           ? Colors.white
                                           : Colors.white.withValues(alpha: 0.3),
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 16,
+                                      fontSize: 15.sp,
                                     ),
                                   ),
                                 ),
@@ -175,7 +198,7 @@ class _ModeSwitchState extends State<ModeSwitch> with SingleTickerProviderStateM
                                           ? Colors.white
                                           : Colors.white.withValues(alpha: 0.3),
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 16,
+                                      fontSize: 15.sp,
                                     ),
                                   ),
                                 ),
@@ -189,11 +212,12 @@ class _ModeSwitchState extends State<ModeSwitch> with SingleTickerProviderStateM
                                   child: Text(
                                     AppStrings.modeGlobal,
                                     style: TextStyle(
-                                      color: widget.mode == ConnectionMode.global
+                                      color:
+                                          widget.mode == ConnectionMode.global
                                           ? Colors.white
                                           : Colors.white.withValues(alpha: 0.3),
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 16,
+                                      fontSize: 15.sp,
                                     ),
                                   ),
                                 ),
@@ -210,17 +234,17 @@ class _ModeSwitchState extends State<ModeSwitch> with SingleTickerProviderStateM
                         alignment: _getAlignment(),
                         child: IgnorePointer(
                           child: Container(
-                            margin: const EdgeInsets.all(6),
+                            margin: EdgeInsets.all(5.r),
                             width: sliderWidth,
-                            height: switchHeight - 12,
+                            height: switchHeight - 10.h,
                             decoration: BoxDecoration(
                               color: _getModeColor(),
-                              borderRadius: BorderRadius.circular(15),
+                              borderRadius: BorderRadius.circular(14.r),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withValues(alpha: 0.3),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
+                                  blurRadius: 8.r,
+                                  offset: Offset(0, 4.h),
                                 ),
                               ],
                             ),
@@ -228,7 +252,7 @@ class _ModeSwitchState extends State<ModeSwitch> with SingleTickerProviderStateM
                               child: Icon(
                                 _getModeIcon(),
                                 color: Colors.white,
-                                size: 32,
+                                size: 28.sp,
                               ),
                             ),
                           ),

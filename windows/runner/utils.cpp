@@ -219,12 +219,15 @@ std::string Utf8FromUtf16(const wchar_t* utf16_string) {
 
 std::wstring ResolveFlutterDataDirectory() {
   const auto data_directory = ExecutableDirectory() / L"data";
-#ifdef _DEBUG
-  return data_directory.wstring();
-#else
+  const auto debug_kernel_blob =
+      data_directory / L"flutter_assets" / L"kernel_blob.bin";
+  std::error_code error;
+  if (std::filesystem::exists(debug_kernel_blob, error)) {
+    return data_directory.wstring();
+  }
   ActivatePendingHotUpdate();
   const auto writable_current = WritableHotUpdateBundleRoot() / L"current";
-  std::error_code error;
+  error.clear();
   if (std::filesystem::exists(writable_current, error) &&
       !IsValidHotUpdateBundle(writable_current)) {
     DeleteIfExists(writable_current);
@@ -244,7 +247,6 @@ std::wstring ResolveFlutterDataDirectory() {
     return legacy_current.wstring();
   }
   return data_directory.wstring();
-#endif
 }
 
 bool RelaunchCurrentExecutable() {

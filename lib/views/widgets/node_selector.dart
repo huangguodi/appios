@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:country_flags/country_flags.dart';
@@ -34,19 +35,19 @@ class NodeSelector extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: () => _showNodeSelectorSheet(context, viewModel),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(16.r),
             child: Container(
-              height: 52,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              height: 36.h,
+              padding: EdgeInsets.symmetric(horizontal: 16.w),
               decoration: BoxDecoration(
                 color: AppColors.cardBackground.withValues(alpha: 0.38),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(16.r),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
               ),
               child: Row(
                 children: [
                   _buildCountryIcon(nodeCountry),
-                  const SizedBox(width: 6),
+                  SizedBox(width: 6.w),
                   Expanded(
                     child: Row(
                       children: [
@@ -55,27 +56,27 @@ class NodeSelector extends StatelessWidget {
                             nodeName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
-                              fontSize: 13,
+                              fontSize: 13.sp,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: 8.w),
                         _buildNodeTag(nodeType),
                         if (nodeUdp) ...[
-                          const SizedBox(width: 6),
+                          SizedBox(width: 6.w),
                           _buildNodeTag('UDP'),
                         ],
                       ],
                     ),
                   ),
-                  const SizedBox(width: 2),
+                  SizedBox(width: 2.w),
                   SvgPicture.asset(
                     AppAssets.icChevronRight,
-                    width: 16,
-                    height: 16,
+                    width: 16.w,
+                    height: 16.w,
                     colorFilter: const ColorFilter.mode(
                       Colors.white70,
                       BlendMode.srcIn,
@@ -92,17 +93,17 @@ class NodeSelector extends StatelessWidget {
 
   Widget _buildNodeTag(String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+      padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 1.h),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(6.r),
         border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
       ),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           color: Colors.white70,
-          fontSize: 8,
+          fontSize: 8.sp,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -113,28 +114,28 @@ class NodeSelector extends StatelessWidget {
     final countryCode = _countryCodeFor(country);
     // Windows 平台 Emoji 渲染支持较差，使用 SVG 旗帜包替代
     if (!kIsWeb && Platform.isWindows) {
-       return SizedBox(
-        width: 26,
-        height: 18,
+      return SizedBox(
+        width: 24.w,
+        height: 14.h,
         child: CountryFlag.fromCountryCode(
           countryCode,
-          shape: const RoundedRectangle(6),
+          shape: RoundedRectangle(6.r),
         ),
       );
     }
-    
+
     return SizedBox(
-      width: 26,
-      height: 18,
+      width: 24.w,
+      height: 14.h,
       child: Center(
         child: Text(
           _flagEmojiFromCode(countryCode),
-          style: const TextStyle(fontSize: 24, height: 1),
+          style: TextStyle(fontSize: 24.sp, height: 1),
         ),
       ),
     );
   }
-  
+
   String _countryCodeFor(String country) {
     final raw = country.trim();
     final upperRaw = raw.toUpperCase();
@@ -144,12 +145,24 @@ class NodeSelector extends StatelessWidget {
     // ... (Simplified logic or full copy if needed)
     // For brevity, using a simpler fallback or I should copy the full logic from HomePage if I want exact behavior.
     // I'll assume standard 2-letter codes mostly, but let's copy the full map for safety.
-    
+
     if (RegExp(r'^[A-Z]{3}$').hasMatch(upperRaw)) {
       const iso3To2 = {
-        'HKG': 'hk', 'JPN': 'jp', 'SGP': 'sg', 'TWN': 'tw', 'KOR': 'kr',
-        'USA': 'us', 'GBR': 'gb', 'DEU': 'de', 'FRA': 'fr', 'NLD': 'nl',
-        'CAN': 'ca', 'AUS': 'au', 'IND': 'in', 'RUS': 'ru', 'CHN': 'cn',
+        'HKG': 'hk',
+        'JPN': 'jp',
+        'SGP': 'sg',
+        'TWN': 'tw',
+        'KOR': 'kr',
+        'USA': 'us',
+        'GBR': 'gb',
+        'DEU': 'de',
+        'FRA': 'fr',
+        'NLD': 'nl',
+        'CAN': 'ca',
+        'AUS': 'au',
+        'IND': 'in',
+        'RUS': 'ru',
+        'CHN': 'cn',
       };
       return iso3To2[upperRaw] ?? 'un';
     }
@@ -157,22 +170,46 @@ class NodeSelector extends StatelessWidget {
     final normalized = country.trim().toLowerCase();
     // Simplified map
     const codeByCountry = {
-      'hongkong': 'hk', 'japan': 'jp', 'singapore': 'sg', 'taiwan': 'tw',
-      'korea': 'kr', 'united states': 'us', 'usa': 'us', 'united kingdom': 'gb',
-      'germany': 'de', 'france': 'fr', 'netherlands': 'nl', 'canada': 'ca',
-      'australia': 'au', 'india': 'in', 'russia': 'ru', 'china': 'cn',
-      '香港': 'hk', '日本': 'jp', '新加坡': 'sg', '台湾': 'tw', '韩国': 'kr',
-      '美国': 'us', '英国': 'gb', '德国': 'de', '法国': 'fr', '荷兰': 'nl',
-      '加拿大': 'ca', '澳大利亚': 'au', '印度': 'in', '俄罗斯': 'ru', '中国': 'cn',
+      'hongkong': 'hk',
+      'japan': 'jp',
+      'singapore': 'sg',
+      'taiwan': 'tw',
+      'korea': 'kr',
+      'united states': 'us',
+      'usa': 'us',
+      'united kingdom': 'gb',
+      'germany': 'de',
+      'france': 'fr',
+      'netherlands': 'nl',
+      'canada': 'ca',
+      'australia': 'au',
+      'india': 'in',
+      'russia': 'ru',
+      'china': 'cn',
+      '香港': 'hk',
+      '日本': 'jp',
+      '新加坡': 'sg',
+      '台湾': 'tw',
+      '韩国': 'kr',
+      '美国': 'us',
+      '英国': 'gb',
+      '德国': 'de',
+      '法国': 'fr',
+      '荷兰': 'nl',
+      '加拿大': 'ca',
+      '澳大利亚': 'au',
+      '印度': 'in',
+      '俄罗斯': 'ru',
+      '中国': 'cn',
     };
-    
+
     final direct = codeByCountry[normalized];
     if (direct != null) return direct;
-    
+
     // Attempt to match by stripping non-alpha
     final compact = normalized.replaceAll(RegExp(r'[^a-z]'), '');
     if (compact.length == 2) return compact;
-    
+
     return 'un';
   }
 
@@ -184,14 +221,18 @@ class NodeSelector extends StatelessWidget {
         String.fromCharCode(upper.codeUnitAt(1) + base);
   }
 
-  Future<void> _showNodeSelectorSheet(BuildContext context, HomeViewModel viewModel) async {
+  Future<void> _showNodeSelectorSheet(
+    BuildContext context,
+    HomeViewModel viewModel,
+  ) async {
     final cachedProxies = MihomoService().cachedProxies;
     final hasWarmCache = cachedProxies != null && cachedProxies.isNotEmpty;
-    final proxies = cachedProxies ?? await MihomoService().getProxies(forceRefresh: true);
+    final proxies =
+        cachedProxies ?? await MihomoService().getProxies(forceRefresh: true);
     final nodes = viewModel.getNodeListFromProxies(proxies);
-    
+
     if (!context.mounted || nodes.isEmpty) return;
-    
+
     final currentNodeName = viewModel.getCurrentGlobalNodeName(proxies);
 
     await showModalBottomSheet<String>(
@@ -208,7 +249,7 @@ class NodeSelector extends StatelessWidget {
         var isRefreshingNodes = false;
         var activeNodeName = currentNodeName;
         var hasScheduledRefresh = false;
-        
+
         return FractionallySizedBox(
           heightFactor: 0.75,
           child: StatefulBuilder(
@@ -219,12 +260,17 @@ class NodeSelector extends StatelessWidget {
                 }
                 modalSetState(() => isRefreshingNodes = true);
                 try {
-                  final freshProxies = await MihomoService().getProxies(forceRefresh: true);
-                  final freshNodes = viewModel.getNodeListFromProxies(freshProxies);
+                  final freshProxies = await MihomoService().getProxies(
+                    forceRefresh: true,
+                  );
+                  final freshNodes = viewModel.getNodeListFromProxies(
+                    freshProxies,
+                  );
                   if (!context.mounted || freshNodes.isEmpty) {
                     return;
                   }
-                  final freshCurrentNodeName = viewModel.getCurrentGlobalNodeName(freshProxies);
+                  final freshCurrentNodeName = viewModel
+                      .getCurrentGlobalNodeName(freshProxies);
                   modalSetState(() {
                     items = List<Map<String, dynamic>>.from(freshNodes);
                     activeNodeName = freshCurrentNodeName;
@@ -239,23 +285,25 @@ class NodeSelector extends StatelessWidget {
               Future<void> runBatchLatencyTests() async {
                 modalSetState(() => isTestingAll = true);
                 try {
-                  for (var start = 0; start < items.length; start += _latencyTestBatchSize) {
+                  for (
+                    var start = 0;
+                    start < items.length;
+                    start += _latencyTestBatchSize
+                  ) {
                     if (!context.mounted) {
                       return;
                     }
                     final end = (start + _latencyTestBatchSize > items.length)
                         ? items.length
                         : start + _latencyTestBatchSize;
-                    final batchResults = await Future.wait(
-                      [
-                        for (var i = start; i < end; i++)
-                          () async {
-                            final name = items[i]['name'] as String;
-                            final delay = await viewModel.testNodeLatency(name);
-                            return (index: i, delay: delay);
-                          }(),
-                      ],
-                    );
+                    final batchResults = await Future.wait([
+                      for (var i = start; i < end; i++)
+                        () async {
+                          final name = items[i]['name'] as String;
+                          final delay = await viewModel.testNodeLatency(name);
+                          return (index: i, delay: delay);
+                        }(),
+                    ]);
                     if (!context.mounted) {
                       return;
                     }
@@ -290,114 +338,131 @@ class NodeSelector extends StatelessWidget {
               return Container(
                 decoration: BoxDecoration(
                   color: AppColors.cardBackground,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(20.r),
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.12),
+                  ),
                 ),
                 child: SafeArea(
                   top: false,
                   child: Column(
                     children: [
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8.h),
                       Container(
-                        width: 66,
-                        height: 4,
+                        width: 66.w,
+                        height: 4.h,
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.66),
-                          borderRadius: BorderRadius.circular(99),
+                          borderRadius: BorderRadius.circular(99.r),
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: 2.h),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: EdgeInsets.symmetric(horizontal: 16.w),
                         child: Row(
                           children: [
-                            const Expanded(
+                            Expanded(
                               child: Text(
                                 '节点列表',
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 14,
+                                  fontSize: 14.sp,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
                             TextButton.icon(
-                              onPressed: isRefreshingNodes || isTestingAll ? null : runBatchLatencyTests,
+                              onPressed: isRefreshingNodes || isTestingAll
+                                  ? null
+                                  : runBatchLatencyTests,
                               icon: isTestingAll
-                                  ? const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                  ? SizedBox(
+                                      width: 14.w,
+                                      height: 14.w,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.w,
+                                      ),
                                     )
-                                  : const Icon(Icons.speed, size: 16),
+                                  : Icon(Icons.speed, size: 16.sp),
                               label: const Text(''),
                               style: TextButton.styleFrom(
                                 foregroundColor: Colors.white,
-                                backgroundColor: Colors.white.withValues(alpha: 0.12),
+                                backgroundColor: Colors.white.withValues(
+                                  alpha: 0.12,
+                                ),
                               ),
                             ),
                             if (hasWarmCache) ...[
-                              const SizedBox(width: 8),
+                              SizedBox(width: 8.w),
                               TextButton.icon(
                                 onPressed: isTestingAll || isRefreshingNodes
                                     ? null
                                     : refreshNodesFromSource,
                                 icon: isRefreshingNodes
-                                    ? const SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                    ? SizedBox(
+                                        width: 14.w,
+                                        height: 14.w,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.w,
+                                        ),
                                       )
-                                    : const Icon(Icons.refresh, size: 16),
+                                    : Icon(Icons.refresh, size: 16.sp),
                                 label: const Text(''),
                                 style: TextButton.styleFrom(
                                   foregroundColor: Colors.white,
-                                  backgroundColor: Colors.white.withValues(alpha: 0.12),
+                                  backgroundColor: Colors.white.withValues(
+                                    alpha: 0.12,
+                                  ),
                                 ),
                               ),
                             ],
                           ],
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8.h),
                       Expanded(
                         child: ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                          padding: EdgeInsets.fromLTRB(12.w, 0, 12.w, 12.h),
                           itemCount: items.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 6),
+                          separatorBuilder: (_, _) => SizedBox(height: 6.h),
                           itemBuilder: (context, index) {
                             final node = items[index];
                             final nodeName = node['name'] as String;
-                            final nodeType = (node['type'] as String).toUpperCase();
+                            final nodeType = (node['type'] as String)
+                                .toUpperCase();
                             final nodeUdp = node['udp'] as bool;
                             final nodeCountry = node['country'] as String;
                             final nodeDelay = node['delay'] as int?;
                             final isSelected = nodeName == activeNodeName;
-                            
+
                             String delayText = '';
                             Color delayColor = Colors.greenAccent;
-                            
+
                             if (nodeDelay != null) {
-                                if (nodeDelay > 0) {
-                                  delayText = '${nodeDelay}ms';
-                                  if (nodeDelay > 1000) {
-                                    delayColor = Colors.redAccent;
-                                  } else if (nodeDelay > 500) {
-                                    delayColor = Colors.orangeAccent;
-                                  }
-                                } else {
-                                  delayText = '-1ms';
+                              if (nodeDelay > 0) {
+                                delayText = '${nodeDelay}ms';
+                                if (nodeDelay > 1000) {
                                   delayColor = Colors.redAccent;
+                                } else if (nodeDelay > 500) {
+                                  delayColor = Colors.orangeAccent;
                                 }
+                              } else {
+                                delayText = '-1ms';
+                                delayColor = Colors.redAccent;
+                              }
                             }
-                            
+
                             return InkWell(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(12.r),
                               onTap: switchingNodeName.isNotEmpty
                                   ? null
                                   : () async {
                                       final navigator = Navigator.of(context);
-                                      final messenger = ScaffoldMessenger.of(context);
+                                      final messenger = ScaffoldMessenger.of(
+                                        context,
+                                      );
                                       if (nodeName == activeNodeName) {
                                         navigator.pop(nodeName);
                                         return;
@@ -405,20 +470,23 @@ class NodeSelector extends StatelessWidget {
                                       modalSetState(() {
                                         switchingNodeName = nodeName;
                                       });
-                                      
-                                      final switched = await viewModel.selectGlobalNode(
-                                        nodeName,
-                                        nodeType: node['type'] as String,
-                                        nodeCountry: nodeCountry,
-                                        nodeUdp: nodeUdp,
-                                      );
-                                      
+
+                                      final switched = await viewModel
+                                          .selectGlobalNode(
+                                            nodeName,
+                                            nodeType: node['type'] as String,
+                                            nodeCountry: nodeCountry,
+                                            nodeUdp: nodeUdp,
+                                          );
+
                                       if (!context.mounted) return;
                                       if (switched) {
                                         navigator.pop(nodeName);
                                       } else {
                                         messenger.showSnackBar(
-                                          const SnackBar(content: Text('节点切换失败')),
+                                          const SnackBar(
+                                            content: Text('节点切换失败'),
+                                          ),
                                         );
                                         modalSetState(() {
                                           switchingNodeName = '';
@@ -426,22 +494,27 @@ class NodeSelector extends StatelessWidget {
                                       }
                                     },
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 12.w,
+                                  vertical: 10.h,
+                                ),
                                 decoration: BoxDecoration(
                                   color: nodeName == activeNodeName
                                       ? Colors.white.withValues(alpha: 0.14)
                                       : Colors.white.withValues(alpha: 0.06),
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(12.r),
                                   border: Border.all(
                                     color: nodeName == activeNodeName
-                                        ? Colors.greenAccent.withValues(alpha: 0.7)
+                                        ? Colors.greenAccent.withValues(
+                                            alpha: 0.7,
+                                          )
                                         : Colors.white.withValues(alpha: 0.1),
                                   ),
                                 ),
                                 child: Row(
                                   children: [
                                     _buildCountryIcon(nodeCountry),
-                                    const SizedBox(width: 6),
+                                    SizedBox(width: 6.w),
                                     Expanded(
                                       child: Row(
                                         children: [
@@ -450,17 +523,17 @@ class NodeSelector extends StatelessWidget {
                                               nodeName,
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 color: Colors.white,
-                                                fontSize: 13,
+                                                fontSize: 13.sp,
                                                 fontWeight: FontWeight.w600,
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(width: 4),
+                                          SizedBox(width: 4.w),
                                           _buildNodeTag(nodeType),
                                           if (nodeUdp) ...[
-                                            const SizedBox(width: 4),
+                                            SizedBox(width: 4.w),
                                             _buildNodeTag('UDP'),
                                           ],
                                           const Spacer(),
@@ -468,30 +541,32 @@ class NodeSelector extends StatelessWidget {
                                       ),
                                     ),
                                     if (delayText.isNotEmpty) ...[
-                                      const SizedBox(width: 2),
+                                      SizedBox(width: 2.w),
                                       Text(
                                         delayText,
                                         style: TextStyle(
                                           color: delayColor,
-                                          fontSize: 10,
+                                          fontSize: 10.sp,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     ],
                                     if (isSelected) ...[
-                                      const SizedBox(width: 8),
-                                      const Icon(
+                                      SizedBox(width: 8.w),
+                                      Icon(
                                         Icons.check_rounded,
                                         color: Colors.greenAccent,
-                                        size: 18,
+                                        size: 18.sp,
                                       ),
                                     ],
                                     if (switchingNodeName == nodeName) ...[
-                                      const SizedBox(width: 8),
-                                      const SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      SizedBox(width: 8.w),
+                                      SizedBox(
+                                        width: 14.w,
+                                        height: 14.w,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.w,
+                                        ),
                                       ),
                                     ],
                                   ],
@@ -501,7 +576,7 @@ class NodeSelector extends StatelessWidget {
                           },
                         ),
                       ),
-                      const SizedBox(height: 26),
+                      SizedBox(height: 26.h),
                     ],
                   ),
                 ),
