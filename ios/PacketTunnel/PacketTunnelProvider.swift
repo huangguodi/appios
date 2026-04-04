@@ -29,6 +29,13 @@ final class SelectProxyPayload: Codable {
 }
 
 final class PacketTunnelProvider: NEPacketTunnelProvider {
+  private enum PhysicalNetworkType {
+    case wifi
+    case cellular
+    case other
+    case unknown
+  }
+
   private enum AppConfigKey {
     static let appGroupId = "IOSAppGroupIdentifier"
   }
@@ -1313,8 +1320,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     if currentType != .unknown {
       lastObservedPhysicalNetworkType = currentType
     }
-    if let currentInterfaceName, !currentInterfaceName.isEmpty {
-      lastObservedPhysicalInterfaceName = currentInterfaceName
+    if let resolvedInterfaceName = currentInterfaceName,
+       !resolvedInterfaceName.isEmpty {
+      lastObservedPhysicalInterfaceName = resolvedInterfaceName
     }
 
     let typeChanged =
