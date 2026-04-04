@@ -37,3 +37,8 @@
 
 七、已完成的专项记忆
 - SERVER-URL 冷启动时序问题（2026-04-03）已修复：iOS Native key 初始化重试 + 启动前确保 serverUrl 就绪；`update_server_url.py` 目标改为 `MihomoIosPlugin.swift`。
+- iOS 首页网速显示与图标问题（2026-04-04）已处理：
+  - iOS `com.accelerator.tg/mihomo/traffic` 事件流改为优先直接向 PacketTunnel 发送 `traffic` provider message 取 `MobileTrafficUp/Down()`，失败时才回退共享状态文件。
+  - iOS 原生流量通道增加“相同 `up/down` 不重复发事件”；Dart `HomeViewModel` 已有“显示文本未变化不 `notifyListeners()`”保护。
+  - iOS 首页网速平滑仅在 Dart 层对 iOS 生效（轻量 EMA，系数 0.35）；Android/Windows 保持原路径不变。
+  - iOS 实际生效图标来源是 `ios/Runner/Assets.xcassets/AppIcon.appiconset`，不是仅修改 `assets/logo.png`；2026-04-04 已按 `assets/logo.png` 重新生成 iOS AppIcon，全程未改 Android/Windows 图标资源。

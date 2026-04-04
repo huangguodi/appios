@@ -41,6 +41,7 @@ class HomeViewModel extends ChangeNotifier {
   static const Duration _initialNodeInfoRefreshDelay = Duration(
     milliseconds: 250,
   );
+  static const double _iosTrafficSmoothingFactor = 0.35;
 
   // State
   ConnectionMode _connectionMode;
@@ -75,6 +76,8 @@ class HomeViewModel extends ChangeNotifier {
   DateTime? _lastSwitchTime;
   DateTime _lastNodeInfoRefreshAt = DateTime.fromMillisecondsSinceEpoch(0);
   bool _isRefreshingNodeInfo = false;
+  double? _smoothedUploadBytesPerSecond;
+  double? _smoothedDownloadBytesPerSecond;
   final List<ExpiredTrafficLogNotice> _pendingExpiredTrafficLogNotices = [];
   static const Set<String> _excludedProxyNames = {
     'DIRECT',
@@ -121,8 +124,9 @@ class HomeViewModel extends ChangeNotifier {
     _syncIosVpnStatus(notify: false);
 
     _trafficSubscription = MihomoService().trafficStream.listen((data) {
-      final up = data['up'];
-      final down = data['down'];
+      final values = _resolveTrafficDisplayValues(data['up'], data['down']);
+      final up = values.$1;
+      final down = values.$2;
       final nextUploadSpeed = formatSpeed(up);
       final nextDownloadSpeed = formatSpeed(down);
       if (nextUploadSpeed == _uploadSpeed &&
@@ -149,6 +153,8 @@ class HomeViewModel extends ChangeNotifier {
         return;
       }
       _connectionMode = ConnectionMode.off;
+      _smoothedUploadBytesPerSecond = null;
+      _smoothedDownloadBytesPerSecond = null;
       _uploadSpeed = "0 B/s";
       _downloadSpeed = "0 B/s";
       notifyListeners();
@@ -560,6 +566,39 @@ class HomeViewModel extends ChangeNotifier {
     final parsed = int.tryParse(value?.toString() ?? '');
     if (parsed == null || parsed <= 0) return 0;
     return parsed;
+  }
+
+  (int, int) _resolveTrafficDisplayValues(dynamic up, dynamic down) {
+    final normalizedUp = _toNonNegativeInt(up);
+    final normalizedDown = _toNonNegativeInt(down);
+    if (!Platform.isIOS) {
+      return (normalizedUp, normalizedDown);
+    }
+    final smoothedUp = _smoothTrafficValue(
+      previousValue: _smoothedUploadBytesPerSecond,
+      nextValue: normalizedUp,
+    );
+    final smoothedDown = _smoothTrafficValue(
+      previousValue: _smoothedDownloadBytesPerSecond,
+      nextValue: normalizedDown,
+    );
+    _smoothedUploadBytesPerSecond = smoothedUp;
+    _smoothedDownloadBytesPerSecond = smoothedDown;
+    return (smoothedUp.round(), smoothedDown.round());
+  }
+
+  double _smoothTrafficValue({
+    required double? previousValue,
+    required int nextValue,
+  }) {
+    if (nextValue <= 0) {
+      return 0;
+    }
+    if (previousValue == null || previousValue <= 0) {
+      return nextValue.toDouble();
+    }
+    return previousValue +
+        (nextValue - previousValue) * _iosTrafficSmoothingFactor;
   }
 
   bool _toBool(dynamic value) {

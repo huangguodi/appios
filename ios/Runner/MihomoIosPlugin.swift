@@ -540,6 +540,9 @@ final class TrafficStreamHandler: NSObject, FlutterStreamHandler {
   private weak var plugin: MihomoIosPlugin?
   private var timer: Timer?
   private var sink: FlutterEventSink?
+  private var isFetching = false
+  private var lastEmittedUp: Int64?
+  private var lastEmittedDown: Int64?
 
   init(plugin: MihomoIosPlugin) {
     self.plugin = plugin
@@ -547,15 +550,13 @@ final class TrafficStreamHandler: NSObject, FlutterStreamHandler {
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
     sink = events
+    lastEmittedUp = nil
+    lastEmittedDown = nil
     DispatchQueue.main.async {
       self.timer?.invalidate()
+      self.emitTraffic()
       self.timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-        guard let sink = self.sink else { return }
-        let state = self.plugin?.readSharedState()
-        sink([
-          "up": state?.up ?? 0,
-          "down": state?.down ?? 0,
-        ])
+        self.emitTraffic()
       }
     }
     return nil
@@ -565,7 +566,66 @@ final class TrafficStreamHandler: NSObject, FlutterStreamHandler {
     timer?.invalidate()
     timer = nil
     sink = nil
+    isFetching = false
+    lastEmittedUp = nil
+    lastEmittedDown = nil
     return nil
+  }
+
+  private func emitTraffic() {
+    guard sink != nil, !isFetching else {
+      return
+    }
+    isFetching = true
+    plugin?.sendProviderMessage(id: "traffic", params: "") { [weak self] response in
+      guard let self else {
+        return
+      }
+      let payload = self.resolveTrafficPayload(response: response)
+      DispatchQueue.main.async {
+        self.isFetching = false
+        guard let sink = self.sink else {
+          return
+        }
+        let up = payload["up"] ?? 0
+        let down = payload["down"] ?? 0
+        if self.lastEmittedUp == up && self.lastEmittedDown == down {
+          return
+        }
+        self.lastEmittedUp = up
+        self.lastEmittedDown = down
+        sink(payload)
+      }
+    }
+  }
+
+  private func resolveTrafficPayload(response: ProviderMessageResponse?) -> [String: Int64] {
+    if
+      let data = response?.data,
+      let parsed = parseTrafficPayload(data)
+    {
+      return parsed
+    }
+    let state = plugin?.readSharedState()
+    return [
+      "up": state?.up ?? 0,
+      "down": state?.down ?? 0
+    ]
+  }
+
+  private func parseTrafficPayload(_ payload: String) -> [String: Int64]? {
+    guard
+      let data = payload.data(using: .utf8),
+      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else {
+      return nil
+    }
+    let up = (object["up"] as? NSNumber)?.int64Value ?? Int64(object["up"] as? Int ?? 0)
+    let down = (object["down"] as? NSNumber)?.int64Value ?? Int64(object["down"] as? Int ?? 0)
+    return [
+      "up": up,
+      "down": down
+    ]
   }
 }
 
