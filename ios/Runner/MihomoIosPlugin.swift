@@ -687,16 +687,12 @@ private struct TunnelSharedStateStore {
     guard let container = FileManager.default.containerURL(
       forSecurityApplicationGroupIdentifier: appGroupId
     ) else {
-      NSLog("MihomoIosPlugin: shared state App Group unavailable for \(appGroupId)")
       return nil
     }
     let directory = container.appendingPathComponent("mihomo_runtime", isDirectory: true)
     do {
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    } catch {
-      NSLog("MihomoIosPlugin: failed to create shared runtime directory - \(error.localizedDescription)")
-      return nil
-    }
+    } catch { return nil }
     return directory.appendingPathComponent("shared_state.json", isDirectory: false)
   }
 }

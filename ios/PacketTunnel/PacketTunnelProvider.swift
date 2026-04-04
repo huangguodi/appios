@@ -838,11 +838,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       if rawValue > 0 && isTunnelFileDescriptor(rawValue) {
         return rawValue
       }
-      NSLog("PacketTunnel: packetFlow socket.fileDescriptor invalid - \(rawValue)")
-    } else {
-      NSLog("PacketTunnel: packetFlow socket.fileDescriptor unavailable")
     }
-    NSLog("PacketTunnel: failed to resolve tunnel file descriptor from all strategies")
     throw NSError(domain: "PacketTunnel", code: -2, userInfo: [
       NSLocalizedDescriptionKey: "failed to resolve tunnel file descriptor: utun fd unavailable"
     ])
@@ -915,9 +911,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       return ProviderMessageResponse(data: MobileTestLatency(message.messageParams))
 
     case "traffic":
-      refreshTrafficOnly(appGroupId: appGroupId)
+      let snapshot = refreshTrafficOnly(appGroupId: appGroupId)
       let payload = """
-      {"up":\(MobileTrafficUp()),"down":\(MobileTrafficDown())}
+      {"up":\(snapshot.up),"down":\(snapshot.down)}
       """
       return ProviderMessageResponse(data: payload)
 
@@ -964,24 +960,14 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     trafficTimer = nil
   }
 
-  private func refreshTrafficOnly(appGroupId: String) {
-    let up = Int64(MobileTrafficUp())
-    let down = Int64(MobileTrafficDown())
-    let status = started ? "running" : "stopped"
-    let mode = started ? MobileGetMode() : ""
-    let snapshot = TrafficSnapshot(
-      status: status,
-      running: started,
-      mode: mode,
-      up: up,
-      down: down
-    )
-    
+  @discardableResult
+  private func refreshTrafficOnly(appGroupId: String) -> TrafficSnapshot {
+    let snapshot = currentTrafficSnapshot()
     let now = Date().timeIntervalSince1970
     let shouldPersist = snapshot != lastPersistedTrafficSnapshot ||
       now - lastPersistedTrafficAt >= 2.0
     guard shouldPersist else {
-      return
+      return snapshot
     }
     persistState(appGroupId: appGroupId) { state in
       if !currentSessionId.isEmpty {
@@ -997,6 +983,21 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     }
     lastPersistedTrafficSnapshot = snapshot
     lastPersistedTrafficAt = now
+    return snapshot
+  }
+
+  private func currentTrafficSnapshot() -> TrafficSnapshot {
+    let up = Int64(MobileTrafficUp())
+    let down = Int64(MobileTrafficDown())
+    let status = started ? "running" : "stopped"
+    let mode = started ? MobileGetMode() : ""
+    return TrafficSnapshot(
+      status: status,
+      running: started,
+      mode: mode,
+      up: up,
+      down: down
+    )
   }
 
   private func refreshSharedState(appGroupId: String, sessionId: String, includeProxies: Bool) {
@@ -1169,9 +1170,7 @@ private struct TunnelSharedStateStore {
     do {
       let data = try JSONEncoder().encode(state)
       try data.write(to: url, options: .atomic)
-    } catch {
-      NSLog("PacketTunnel: failed to write shared state - \(error.localizedDescription)")
-    }
+    } catch {}
   }
 
   func clear() {
@@ -1185,16 +1184,12 @@ private struct TunnelSharedStateStore {
     guard let container = FileManager.default.containerURL(
       forSecurityApplicationGroupIdentifier: appGroupId
     ) else {
-      NSLog("PacketTunnel: shared state App Group unavailable for \(appGroupId)")
       return nil
     }
     let directory = container.appendingPathComponent("mihomo_runtime", isDirectory: true)
     do {
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    } catch {
-      NSLog("PacketTunnel: failed to create shared runtime directory - \(error.localizedDescription)")
-      return nil
-    }
+    } catch { return nil }
     return directory.appendingPathComponent("shared_state.json", isDirectory: false)
   }
 }
