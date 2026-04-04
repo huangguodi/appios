@@ -130,13 +130,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         NSLocalizedDescriptionKey: "startTunnel timeout"
       ])
       let timeoutWorkItem = DispatchWorkItem { [weak self] in
-        guard let self else { return }
+        guard let strongSelf = self else { return }
         if gate.call(timeoutError) {
-          if self.started {
+          if strongSelf.started {
             MobileStop()
           }
-          self.clearBridgeRegistrations()
-          self.persistFailureState(
+          strongSelf.clearBridgeRegistrations()
+          strongSelf.persistFailureState(
             appGroupId: appGroupId,
             sessionId: sessionId,
             message: "startTunnel timeout"
@@ -231,7 +231,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   }
 
   fileprivate func openTun(options: MobileTunOptions?) -> Int64 {
-    guard let options else {
+    guard let options = options else {
       recordTunOpenFailure("missing tun options")
       persistFailureState(
         appGroupId: resolveAppGroupId(),
@@ -546,7 +546,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   }
 
   private func parseStringList(_ raw: Any?) -> [String] {
-    guard let raw else {
+    guard let raw = raw else {
       return []
     }
     if let values = raw as? [String] {
@@ -1182,8 +1182,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   }
 
   private func resolveCurrentTunnelInterfaceName() -> String? {
-    if let currentTunnelInterfaceName, !currentTunnelInterfaceName.isEmpty {
-      return currentTunnelInterfaceName
+    if let resolvedTunnelInterfaceName = currentTunnelInterfaceName,
+       !resolvedTunnelInterfaceName.isEmpty {
+      return resolvedTunnelInterfaceName
     }
     let fd = Int(lastTunOpenFD)
     if fd > 0, let resolved = tunnelInterfaceName(for: fd) {
