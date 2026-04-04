@@ -11,15 +11,47 @@
 #include "Universe.objc.h"
 
 
+@class MobileTunOptions;
 @protocol MobileSocketProtector;
 @class MobileSocketProtector;
+@protocol MobileTunOpener;
+@class MobileTunOpener;
 
 @protocol MobileSocketProtector <NSObject>
 - (BOOL)markSocket:(int64_t)fd network:(NSString* _Nullable)network address:(NSString* _Nullable)address;
 - (BOOL)protectSocket:(int64_t)fd network:(NSString* _Nullable)network address:(NSString* _Nullable)address;
 @end
 
+@protocol MobileTunOpener <NSObject>
+- (int64_t)openTun:(MobileTunOptions* _Nullable)options;
+@end
+
+@interface MobileTunOptions : NSObject <goSeqRefInterface> {
+}
+@property(strong, readonly) _Nonnull id _ref;
+
+- (nonnull instancetype)initWithRef:(_Nonnull id)ref;
+- (nonnull instancetype)init;
+- (BOOL)autoRoute;
+- (NSString* _Nonnull)dnsHijack;
+- (NSString* _Nonnull)dnsServers;
+- (BOOL)disableICMPForwarding;
+- (NSString* _Nonnull)excludeInterface;
+- (NSString* _Nonnull)includeInterface;
+- (NSString* _Nonnull)inet4Address;
+- (NSString* _Nonnull)inet6Address;
+- (NSString* _Nonnull)json;
+- (int64_t)mtu;
+- (NSString* _Nonnull)name;
+- (NSString* _Nonnull)routeAddress;
+- (NSString* _Nonnull)routeExcludeAddress;
+- (NSString* _Nonnull)stack;
+- (BOOL)strictRoute;
+@end
+
 FOUNDATION_EXPORT void MobileClearSocketProtector(void);
+
+FOUNDATION_EXPORT void MobileClearTunOpener(void);
 
 FOUNDATION_EXPORT void MobileForceUpdateConfig(NSString* _Nullable configFileName);
 
@@ -41,6 +73,8 @@ FOUNDATION_EXPORT void MobileSetMode(NSString* _Nullable mode);
 
 FOUNDATION_EXPORT void MobileSetSocketProtector(id<MobileSocketProtector> _Nullable protector);
 
+FOUNDATION_EXPORT void MobileSetTunOpener(id<MobileTunOpener> _Nullable opener);
+
 FOUNDATION_EXPORT void MobileStart(NSString* _Nullable home, NSString* _Nullable configFileName);
 
 FOUNDATION_EXPORT void MobileStop(void);
@@ -59,6 +93,8 @@ FOUNDATION_EXPORT NSString* _Nonnull MobileVersion(void);
 
 @class MobileSocketProtector;
 
+@class MobileTunOpener;
+
 @interface MobileSocketProtector : NSObject <goSeqRefInterface, MobileSocketProtector> {
 }
 @property(strong, readonly) _Nonnull id _ref;
@@ -66,6 +102,14 @@ FOUNDATION_EXPORT NSString* _Nonnull MobileVersion(void);
 - (nonnull instancetype)initWithRef:(_Nonnull id)ref;
 - (BOOL)markSocket:(int64_t)fd network:(NSString* _Nullable)network address:(NSString* _Nullable)address;
 - (BOOL)protectSocket:(int64_t)fd network:(NSString* _Nullable)network address:(NSString* _Nullable)address;
+@end
+
+@interface MobileTunOpener : NSObject <goSeqRefInterface, MobileTunOpener> {
+}
+@property(strong, readonly) _Nonnull id _ref;
+
+- (nonnull instancetype)initWithRef:(_Nonnull id)ref;
+- (int64_t)openTun:(MobileTunOptions* _Nullable)options;
 @end
 
 #endif

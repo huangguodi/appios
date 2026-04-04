@@ -4,10 +4,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:app/core/constants.dart';
+import 'package:app/core/failure_mapper.dart';
 import 'package:app/core/logger.dart';
 import 'package:app/services/api_service.dart'; // Import ApiService
 import 'package:app/services/hot_update_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -87,6 +89,7 @@ class MihomoService {
   IosVpnStartupPhase _iosVpnStartupPhase = IosVpnStartupPhase.idle;
   String? _iosVpnStartupFailure;
   String? _activeIosSessionId;
+  bool _showingIosFdErrorDialog = false;
 
   bool get isRunning => _isRunning;
   Stream<bool> get runningStateStream => _runningStateController.stream;
@@ -510,15 +513,37 @@ class MihomoService {
       await directory.create(recursive: true);
     }
     await _ensureGeoDatabase(directory);
+    final normalizedContent = _normalizeConfigForCurrentPlatform(content);
     final file = File('${directory.path}/config.yaml');
     if (await file.exists()) {
       final existing = await file.readAsString();
-      if (existing == content) {
+      if (existing == normalizedContent) {
         return file.path;
       }
     }
-    await file.writeAsString(content);
+    await file.writeAsString(normalizedContent);
     return file.path;
+  }
+
+  String _normalizeConfigForCurrentPlatform(String content) {
+    if (!Platform.isIOS) {
+      return content;
+    }
+    return _ensureIosTunBootstrap(content);
+  }
+
+  String _ensureIosTunBootstrap(String content) {
+    final normalized = content.replaceAll('\r\n', '\n');
+    final hasTunSection = RegExp(r'^(?:\uFEFF)?tun:\s*', multiLine: true).hasMatch(normalized);
+    if (hasTunSection) {
+      return content;
+    }
+    final lineEnding = content.contains('\r\n') ? '\r\n' : '\n';
+    final body = normalized.trimRight();
+    final prefix = body.isEmpty ? '' : '$body$lineEnding$lineEnding';
+    return '$prefix'
+        'tun:$lineEnding'
+        '  enable: true$lineEnding';
   }
 
   Future<void> _ensureGeoDatabase(Directory directory) async {
@@ -766,6 +791,42 @@ class MihomoService {
 
   Future<void> _showStartErrorDialog(String message) async {
     AppLogger.e("MihomoService: start failed: $message");
+    if (!Platform.isIOS || _showingIosFdErrorDialog) {
+      return;
+    }
+    final presentation = mapAppFailure(
+      category: AppFailureCategory.vpnStart,
+      surface: AppFailureSurface.splash,
+      rawMessage: message,
+    );
+    if (presentation.code != 'VPN-FD') {
+      return;
+    }
+    final context = appNavigatorKey.currentContext;
+    if (context == null) {
+      return;
+    }
+    _showingIosFdErrorDialog = true;
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('VPN 启动失败'),
+            content: Text(presentation.detail),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('知道了'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      _showingIosFdErrorDialog = false;
+    }
   }
 
   Future<bool> ensureIosStarted({

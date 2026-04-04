@@ -33,12 +33,17 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     static let appGroupId = "IOSAppGroupIdentifier"
   }
   private let actionQueue = DispatchQueue(label: "com.accelerator.tg.packet-tunnel.action")
+  private let tunOpenStateLock = NSLock()
   private var started = false
   private var currentSessionId = ""
   private var trafficTimer: DispatchSourceTimer?
   private var lastPersistedTrafficSnapshot = TrafficSnapshot.empty
   private var lastPersistedTrafficAt: TimeInterval = 0
   private var socketProtector: PacketTunnelSocketProtector?
+  private var tunOpener: PacketTunnelTunOpener?
+  private var lastTunOpenInvoked = false
+  private var lastTunOpenFD: Int64 = 0
+  private var lastTunOpenError: String?
   private var defaultAppGroupId: String {
     if let configuredAppGroupId = configValue(for: AppConfigKey.appGroupId) {
       return configuredAppGroupId
@@ -50,16 +55,21 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     }
     return "group.\(effectiveBundleId)"
   }
-  private struct RuntimeTunConfig {
+  private struct PlatformTunOptions {
     var autoRoute: Bool = false
-    var mtu: Int?
+    var strictRoute: Bool = false
+    var mtu: Int = 1500
     var inet4Address: [String] = []
     var inet6Address: [String] = []
-    var inet4RouteAddress: [String] = []
-    var inet6RouteAddress: [String] = []
-    var inet4RouteExcludeAddress: [String] = []
-    var inet6RouteExcludeAddress: [String] = []
+    var routeAddress: [String] = []
+    var routeExcludeAddress: [String] = []
     var dnsServers: [String] = []
+    var dnsHijack: [String] = []
+    var includeInterface: [String] = []
+    var excludeInterface: [String] = []
+    var disableICMPForwarding: Bool = false
+    var name: String = ""
+    var stack: String = ""
   }
 
   private func configValue(for key: String) -> String? {
@@ -92,15 +102,17 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         ? (providerConfig["sessionId"] as? String)!.trimmingCharacters(in: .whitespacesAndNewlines)
         : UUID().uuidString
       _ = try validateSharedRuntimeDirectory(appGroupId: appGroupId)
-      currentSessionId = sessionId
+      prepareForStart(sessionId: sessionId)
       let timeoutError = NSError(domain: "PacketTunnel", code: -10, userInfo: [
         NSLocalizedDescriptionKey: "startTunnel timeout"
       ])
       let timeoutWorkItem = DispatchWorkItem { [weak self] in
         guard let self else { return }
         if gate.call(timeoutError) {
-          self.stopTrafficTimer()
-          self.started = false
+          if self.started {
+            MobileStop()
+          }
+          self.clearBridgeRegistrations()
           self.persistFailureState(
             appGroupId: appGroupId,
             sessionId: sessionId,
@@ -123,69 +135,43 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         state.lastError = nil
       }
 
-      let runtimeTunConfig = loadRuntimeTunConfig(
-        homeDir: homeDir,
-        configFileName: configFileName
-      )
-      let settings = buildNetworkSettings(runtimeTunConfig: runtimeTunConfig)
-      setTunnelNetworkSettings(settings) { [weak self] error in
-        guard let self else {
-          finish(error)
-          return
-        }
-        if let error {
-          self.persistFailureState(
-            appGroupId: appGroupId,
-            sessionId: sessionId,
-            message: error.localizedDescription
-          )
-          finish(error)
-          return
-        }
-        self.actionQueue.async {
-          autoreleasepool {
-            do {
-              let fd = try self.resolveTunnelFileDescriptor()
-              try self.prepareConfigFile(
-                homeDir: homeDir,
-                configFileName: configFileName,
-                fileDescriptor: fd
-              )
-              let protector = PacketTunnelSocketProtector(provider: self)
-              MobileSetSocketProtector(protector)
-              self.socketProtector = protector
-              MobileSetLogLevel("silent")
-              MobileStart(homeDir, configFileName)
-              self.currentSessionId = sessionId
-              self.started = true
-              self.lastPersistedTrafficSnapshot = .empty
-              self.lastPersistedTrafficAt = 0
-              self.startTrafficTimer(appGroupId: appGroupId)
-              self.persistRunningState(appGroupId: appGroupId, sessionId: sessionId)
-              finish(nil)
-              self.actionQueue.async { [weak self] in
-                autoreleasepool {
-                  self?.refreshSharedState(
-                    appGroupId: appGroupId,
-                    sessionId: sessionId,
-                    includeProxies: true
-                  )
-                }
-              }
-            } catch {
-              if self.started {
-                MobileStop()
-              }
-              MobileClearSocketProtector()
-              self.socketProtector = nil
-              self.stopTrafficTimer()
-              self.started = false
-              self.persistFailureState(
+      actionQueue.async {
+        autoreleasepool {
+          let protector = PacketTunnelSocketProtector(provider: self)
+          let opener = PacketTunnelTunOpener(provider: self)
+          self.clearBridgeRegistrations()
+          MobileSetSocketProtector(protector)
+          MobileSetTunOpener(opener)
+          self.socketProtector = protector
+          self.tunOpener = opener
+          MobileSetLogLevel("silent")
+          MobileStart(homeDir, configFileName)
+          let tunOpenState = self.tunOpenState()
+          guard tunOpenState.invoked, tunOpenState.fd > 0 else {
+            let message = tunOpenState.error ?? "openTun failed"
+            MobileStop()
+            self.clearBridgeRegistrations()
+            self.persistFailureState(
+              appGroupId: appGroupId,
+              sessionId: sessionId,
+              message: message
+            )
+            finish(NSError(domain: "PacketTunnel", code: -22, userInfo: [
+              NSLocalizedDescriptionKey: message
+            ]))
+            return
+          }
+          self.started = true
+          self.startTrafficTimer(appGroupId: appGroupId)
+          self.persistRunningState(appGroupId: appGroupId, sessionId: sessionId)
+          finish(nil)
+          self.actionQueue.async { [weak self] in
+            autoreleasepool {
+              self?.refreshSharedState(
                 appGroupId: appGroupId,
                 sessionId: sessionId,
-                message: error.localizedDescription
+                includeProxies: true
               )
-              finish(error)
             }
           }
         }
@@ -205,10 +191,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       if self.started {
         MobileStop()
       }
-      MobileClearSocketProtector()
-      self.socketProtector = nil
-      self.stopTrafficTimer()
-      self.started = false
+      self.clearBridgeRegistrations()
       self.persistStoppedState(appGroupId: appGroupId, sessionId: self.currentSessionId)
       self.currentSessionId = ""
       completionHandler()
@@ -224,11 +207,107 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     }
   }
 
-  private func buildNetworkSettings(runtimeTunConfig: RuntimeTunConfig) -> NEPacketTunnelNetworkSettings {
-    let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
-    settings.mtu = NSNumber(value: runtimeTunConfig.mtu ?? 1500)
+  fileprivate func openTun(options: MobileTunOptions?) -> Int64 {
+    guard let options else {
+      recordTunOpenFailure("missing tun options")
+      persistFailureState(
+        appGroupId: resolveAppGroupId(),
+        sessionId: currentSessionId,
+        message: "missing tun options"
+      )
+      return -1
+    }
 
-    let ipv4AddressPairs = runtimeTunConfig.inet4Address.compactMap(parseIPv4CIDR)
+    do {
+      let payload = parseTunOptions(options)
+      let settings = buildNetworkSettings(tunOptions: payload)
+      try applyTunnelNetworkSettings(settings)
+      let fd = try resolveTunnelFileDescriptor()
+      recordTunOpenSuccess(fd: Int64(fd))
+      return Int64(fd)
+    } catch {
+      recordTunOpenFailure(error.localizedDescription)
+      persistFailureState(
+        appGroupId: resolveAppGroupId(),
+        sessionId: currentSessionId,
+        message: error.localizedDescription
+      )
+      return -1
+    }
+  }
+
+  private func resetTunOpenState() {
+    tunOpenStateLock.lock()
+    lastTunOpenInvoked = false
+    lastTunOpenFD = 0
+    lastTunOpenError = nil
+    tunOpenStateLock.unlock()
+  }
+
+  private func prepareForStart(sessionId: String) {
+    currentSessionId = sessionId
+    started = false
+    stopTrafficTimer()
+    lastPersistedTrafficSnapshot = .empty
+    lastPersistedTrafficAt = 0
+    resetTunOpenState()
+  }
+
+  private func clearBridgeRegistrations() {
+    MobileClearTunOpener()
+    MobileClearSocketProtector()
+    tunOpener = nil
+    socketProtector = nil
+    stopTrafficTimer()
+    started = false
+  }
+
+  private func recordTunOpenSuccess(fd: Int64) {
+    tunOpenStateLock.lock()
+    lastTunOpenInvoked = true
+    lastTunOpenFD = fd
+    lastTunOpenError = nil
+    tunOpenStateLock.unlock()
+  }
+
+  private func recordTunOpenFailure(_ message: String) {
+    tunOpenStateLock.lock()
+    lastTunOpenInvoked = true
+    lastTunOpenFD = -1
+    lastTunOpenError = message
+    tunOpenStateLock.unlock()
+  }
+
+  private func tunOpenState() -> (invoked: Bool, fd: Int64, error: String?) {
+    tunOpenStateLock.lock()
+    let state = (lastTunOpenInvoked, lastTunOpenFD, lastTunOpenError)
+    tunOpenStateLock.unlock()
+    return state
+  }
+
+  private func applyTunnelNetworkSettings(_ settings: NEPacketTunnelNetworkSettings) throws {
+    let semaphore = DispatchSemaphore(value: 0)
+    var applyError: Error?
+    setTunnelNetworkSettings(settings) { error in
+      applyError = error
+      semaphore.signal()
+    }
+    let result = semaphore.wait(timeout: .now() + 8.0)
+    if result == .timedOut {
+      throw NSError(domain: "PacketTunnel", code: -21, userInfo: [
+        NSLocalizedDescriptionKey: "setTunnelNetworkSettings timeout"
+      ])
+    }
+    if let applyError {
+      throw applyError
+    }
+  }
+
+  private func buildNetworkSettings(tunOptions: PlatformTunOptions) -> NEPacketTunnelNetworkSettings {
+    let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
+    settings.mtu = NSNumber(value: max(tunOptions.mtu, 1))
+
+    let ipv4AddressPairs = tunOptions.inet4Address.compactMap(parseIPv4CIDR)
     let ipv4Addresses = ipv4AddressPairs.isEmpty
       ? ["172.19.0.1"]
       : ipv4AddressPairs.map { $0.address }
@@ -236,237 +315,243 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       ? ["255.255.255.252"]
       : ipv4AddressPairs.map { $0.mask }
     let ipv4 = NEIPv4Settings(addresses: ipv4Addresses, subnetMasks: ipv4Masks)
-    let ipv4IncludedRoutes = runtimeTunConfig.inet4RouteAddress.compactMap(parseIPv4Route)
-    ipv4.includedRoutes = ipv4IncludedRoutes.isEmpty ? [NEIPv4Route.default()] : ipv4IncludedRoutes
-    let ipv4ExcludedRoutes = runtimeTunConfig.inet4RouteExcludeAddress.compactMap(parseIPv4Route)
-    if !ipv4ExcludedRoutes.isEmpty {
-      ipv4.excludedRoutes = ipv4ExcludedRoutes
+    if tunOptions.autoRoute {
+      let ipv4IncludedRoutes = tunOptions.routeAddress
+        .filter { !$0.contains(":") }
+        .compactMap(parseIPv4Route)
+      ipv4.includedRoutes = ipv4IncludedRoutes.isEmpty ? [NEIPv4Route.default()] : ipv4IncludedRoutes
+      let ipv4ExcludedRoutes = tunOptions.routeExcludeAddress
+        .filter { !$0.contains(":") }
+        .compactMap(parseIPv4Route)
+      if !ipv4ExcludedRoutes.isEmpty {
+        ipv4.excludedRoutes = ipv4ExcludedRoutes
+      }
     }
     settings.ipv4Settings = ipv4
 
-    let ipv6AddressPairs = runtimeTunConfig.inet6Address.compactMap(parseIPv6CIDR)
-    let ipv6Addresses = ipv6AddressPairs.isEmpty
-      ? ["fdfe:dcbe:9876::1"]
-      : ipv6AddressPairs.map { $0.address }
-    let ipv6Prefix = ipv6AddressPairs.isEmpty
-      ? [NSNumber(value: 126)]
-      : ipv6AddressPairs.map { $0.prefix }
-    let ipv6 = NEIPv6Settings(addresses: ipv6Addresses, networkPrefixLengths: ipv6Prefix)
-    let ipv6IncludedRoutes = runtimeTunConfig.inet6RouteAddress.compactMap(parseIPv6Route)
-    ipv6.includedRoutes = ipv6IncludedRoutes.isEmpty ? [NEIPv6Route.default()] : ipv6IncludedRoutes
-    let ipv6ExcludedRoutes = runtimeTunConfig.inet6RouteExcludeAddress.compactMap(parseIPv6Route)
-    if !ipv6ExcludedRoutes.isEmpty {
-      ipv6.excludedRoutes = ipv6ExcludedRoutes
+    let shouldConfigureIPv6 =
+      !tunOptions.inet6Address.isEmpty ||
+      (tunOptions.autoRoute && tunOptions.routeAddress.contains(where: { $0.contains(":") })) ||
+      (tunOptions.autoRoute && tunOptions.routeExcludeAddress.contains(where: { $0.contains(":") }))
+    if shouldConfigureIPv6 {
+      let ipv6AddressPairs = tunOptions.inet6Address.compactMap(parseIPv6CIDR)
+      let ipv6Addresses = ipv6AddressPairs.isEmpty
+        ? ["fdfe:dcbe:9876::1"]
+        : ipv6AddressPairs.map { $0.address }
+      let ipv6Prefix = ipv6AddressPairs.isEmpty
+        ? [NSNumber(value: 126)]
+        : ipv6AddressPairs.map { $0.prefix }
+      let ipv6 = NEIPv6Settings(addresses: ipv6Addresses, networkPrefixLengths: ipv6Prefix)
+      if tunOptions.autoRoute {
+        let ipv6IncludedRoutes = tunOptions.routeAddress
+          .filter { $0.contains(":") }
+          .compactMap(parseIPv6Route)
+        ipv6.includedRoutes = ipv6IncludedRoutes.isEmpty ? [NEIPv6Route.default()] : ipv6IncludedRoutes
+        let ipv6ExcludedRoutes = tunOptions.routeExcludeAddress
+          .filter { $0.contains(":") }
+          .compactMap(parseIPv6Route)
+        if !ipv6ExcludedRoutes.isEmpty {
+          ipv6.excludedRoutes = ipv6ExcludedRoutes
+        }
+      }
+      settings.ipv6Settings = ipv6
     }
-    settings.ipv6Settings = ipv6
 
-    let dnsServers = runtimeTunConfig.dnsServers.filter {
+    let dnsServers = normalizeDnsServers(tunOptions.dnsServers).filter {
       isValidIPv4Address($0) || isValidIPv6Address($0)
     }
-    if !dnsServers.isEmpty {
+    if tunOptions.autoRoute && !dnsServers.isEmpty {
       let dns = NEDNSSettings(servers: dnsServers)
       dns.matchDomains = [""]
+      dns.matchDomainsNoSearch = true
       settings.dnsSettings = dns
     }
     return settings
   }
 
-  private func loadRuntimeTunConfig(homeDir: String, configFileName: String) -> RuntimeTunConfig {
-    let path = (homeDir as NSString).appendingPathComponent(configFileName)
-    guard
-      let content = try? String(contentsOfFile: path, encoding: .utf8)
-    else {
-      return RuntimeTunConfig()
-    }
-    let preparedContent = ensureTunSection(content: content)
-    if preparedContent != content {
-      try? preparedContent.write(
-        to: URL(fileURLWithPath: path),
-        atomically: true,
-        encoding: .utf8
-      )
-    }
-
-    let normalized = preparedContent.replacingOccurrences(of: "\r\n", with: "\n")
-    let lines = normalized.components(separatedBy: "\n")
-    let tunSection = topLevelSection(named: "tun", from: lines)
-    let dnsSection = topLevelSection(named: "dns", from: lines)
-
-    var config = RuntimeTunConfig()
-    config.autoRoute = false
-    config.mtu = parseIntValue(key: "mtu", in: tunSection)
-    config.inet4Address = parseListValue(key: "inet4-address", in: tunSection)
-    config.inet6Address = parseListValue(key: "inet6-address", in: tunSection)
-    config.inet4RouteAddress = parseListValue(key: "inet4-route-address", in: tunSection)
-    config.inet6RouteAddress = parseListValue(key: "inet6-route-address", in: tunSection)
-    config.inet4RouteExcludeAddress = parseListValue(
-      key: "inet4-route-exclude-address",
-      in: tunSection
-    )
-    config.inet6RouteExcludeAddress = parseListValue(
-      key: "inet6-route-exclude-address",
-      in: tunSection
-    )
-
-    let routeAddress = parseListValue(key: "route-address", in: tunSection)
-    if config.inet4RouteAddress.isEmpty {
-      config.inet4RouteAddress = routeAddress.filter { !$0.contains(":") }
-    }
-    if config.inet6RouteAddress.isEmpty {
-      config.inet6RouteAddress = routeAddress.filter { $0.contains(":") }
-    }
-
-    let routeExcludeAddress = parseListValue(key: "route-exclude-address", in: tunSection)
-    if config.inet4RouteExcludeAddress.isEmpty {
-      config.inet4RouteExcludeAddress = routeExcludeAddress.filter { !$0.contains(":") }
-    }
-    if config.inet6RouteExcludeAddress.isEmpty {
-      config.inet6RouteExcludeAddress = routeExcludeAddress.filter { $0.contains(":") }
-    }
-
-    let dnsRawServers =
-      parseListValue(key: "nameserver", in: dnsSection) +
-      parseListValue(key: "default-nameserver", in: dnsSection) +
-      parseListValue(key: "proxy-server-nameserver", in: dnsSection) +
-      parseListValue(key: "fallback", in: dnsSection)
-    config.dnsServers = normalizeDnsServers(dnsRawServers)
-    return config
+  private func parseTunOptions(_ options: MobileTunOptions) -> PlatformTunOptions {
+    let jsonObject = decodeJSONObject(options.json())
+    var payload = PlatformTunOptions()
+    payload.autoRoute = boolValue(
+      in: jsonObject,
+      keys: ["auto-route", "autoRoute", "auto_route"]
+    ) ?? options.autoRoute()
+    payload.strictRoute = boolValue(
+      in: jsonObject,
+      keys: ["strict-route", "strictRoute", "strict_route"]
+    ) ?? options.strictRoute()
+    payload.mtu = intValue(
+      in: jsonObject,
+      keys: ["mtu", "MTU"]
+    ) ?? Int(options.mtu())
+    payload.inet4Address = stringListValue(
+      in: jsonObject,
+      keys: ["inet4-address", "inet4Address", "inet4_address"]
+    ) ?? parseStringList(options.inet4Address())
+    payload.inet6Address = stringListValue(
+      in: jsonObject,
+      keys: ["inet6-address", "inet6Address", "inet6_address"]
+    ) ?? parseStringList(options.inet6Address())
+    payload.routeAddress = stringListValue(
+      in: jsonObject,
+      keys: ["route-address", "routeAddress", "route_address"]
+    ) ?? parseStringList(options.routeAddress())
+    payload.routeExcludeAddress = stringListValue(
+      in: jsonObject,
+      keys: ["route-exclude-address", "routeExcludeAddress", "route_exclude_address"]
+    ) ?? parseStringList(options.routeExcludeAddress())
+    payload.dnsServers = stringListValue(
+      in: jsonObject,
+      keys: ["dns-servers", "dnsServers", "dns_servers"]
+    ) ?? parseStringList(options.dnsServers())
+    payload.dnsHijack = stringListValue(
+      in: jsonObject,
+      keys: ["dns-hijack", "dnsHijack", "dns_hijack"]
+    ) ?? parseStringList(options.dnsHijack())
+    payload.includeInterface = stringListValue(
+      in: jsonObject,
+      keys: ["include-interface", "includeInterface", "include_interface"]
+    ) ?? parseStringList(options.includeInterface())
+    payload.excludeInterface = stringListValue(
+      in: jsonObject,
+      keys: ["exclude-interface", "excludeInterface", "exclude_interface"]
+    ) ?? parseStringList(options.excludeInterface())
+    payload.disableICMPForwarding = boolValue(
+      in: jsonObject,
+      keys: ["disable-icmp-forwarding", "disableICMPForwarding", "disable_icmp_forwarding"]
+    ) ?? options.disableICMPForwarding()
+    payload.name = stringValue(
+      in: jsonObject,
+      keys: ["name", "Name"]
+    ) ?? options.name()
+    payload.stack = stringValue(
+      in: jsonObject,
+      keys: ["stack", "Stack"]
+    ) ?? options.stack()
+    return payload
   }
 
-  private func ensureTunSection(content: String) -> String {
-    let useCrlf = content.contains("\r\n")
-    let normalized = content.replacingOccurrences(of: "\r\n", with: "\n")
-    let lines = normalized.components(separatedBy: "\n")
-    let hasTun = lines.contains { line in
-      let trimmed = line.trimmingCharacters(in: .whitespaces)
-      return trimmed == "tun:" && !line.hasPrefix(" ") && !line.hasPrefix("\t")
+  private func decodeJSONObject(_ json: String) -> [String: Any] {
+    guard
+      let data = json.data(using: .utf8),
+      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else {
+      return [:]
     }
-    guard !hasTun else {
-      return content
-    }
-    let suffix = normalized.isEmpty || normalized.hasSuffix("\n") ? "" : "\n"
-    let appended = """
-    \(normalized)\(suffix)tun:
-      enable: true
-      stack: system
-      auto-route: false
-      auto-detect-interface: true
-      mtu: 1500
-      inet4-address: [172.19.0.1/30]
-      inet6-address: [fdfe:dcbe:9876::1/126]
-      route-address: [0.0.0.0/0, ::/0]
-      dns-hijack: []
-
-    """
-    return useCrlf ? appended.replacingOccurrences(of: "\n", with: "\r\n") : appended
+    return object
   }
 
-  private func topLevelSection(named name: String, from lines: [String]) -> [String] {
-    guard
-      let startIndex = lines.firstIndex(where: { line in
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        return trimmed == "\(name):" && !line.hasPrefix(" ") && !line.hasPrefix("\t")
-      })
-    else {
-      return []
-    }
-    var section: [String] = []
-    var index = startIndex + 1
-    while index < lines.count {
-      let line = lines[index]
-      if isTopLevelYamlKeyLine(line) {
-        break
+  private func value(in object: [String: Any], keys: [String]) -> Any? {
+    for key in keys {
+      if let value = object[key] {
+        return value
       }
-      section.append(line)
-      index += 1
-    }
-    return section
-  }
-
-  private func isTopLevelYamlKeyLine(_ line: String) -> Bool {
-    if line.isEmpty || line.hasPrefix(" ") || line.hasPrefix("\t") {
-      return false
-    }
-    let trimmed = line.trimmingCharacters(in: .whitespaces)
-    if trimmed.hasPrefix("-") || trimmed.hasPrefix("#") {
-      return false
-    }
-    return trimmed.range(of: #"^[A-Za-z0-9_-]+:\s*"#, options: .regularExpression) != nil
-  }
-
-  private func parseIntValue(key: String, in section: [String]) -> Int? {
-    for line in section {
-      let trimmed = line.trimmingCharacters(in: .whitespaces)
-      guard trimmed.hasPrefix("\(key):") else { continue }
-      let raw = trimmed.dropFirst(key.count + 1)
-      let value = sanitizeYamlScalar(String(raw))
-      return Int(value)
     }
     return nil
   }
 
-  private func parseBoolValue(key: String, in section: [String]) -> Bool? {
-    for line in section {
-      let trimmed = line.trimmingCharacters(in: .whitespaces)
-      guard trimmed.hasPrefix("\(key):") else { continue }
-      let raw = trimmed.dropFirst(key.count + 1)
-      let value = sanitizeYamlScalar(String(raw)).lowercased()
-      if value == "true" {
-        return true
-      }
-      if value == "false" {
-        return false
-      }
+  private func boolValue(in object: [String: Any], keys: [String]) -> Bool? {
+    guard let value = value(in: object, keys: keys) else {
       return nil
     }
+    if let boolValue = value as? Bool {
+      return boolValue
+    }
+    if let numberValue = value as? NSNumber {
+      return numberValue.boolValue
+    }
+    if let stringValue = value as? String {
+      let normalized = sanitizeYamlScalar(stringValue).lowercased()
+      if normalized == "true" {
+        return true
+      }
+      if normalized == "false" {
+        return false
+      }
+    }
     return nil
   }
 
-  private func parseListValue(key: String, in section: [String]) -> [String] {
-    for i in 0..<section.count {
-      let line = section[i]
-      let trimmed = line.trimmingCharacters(in: .whitespaces)
-      guard trimmed.hasPrefix("\(key):") else { continue }
-      let keyIndent = leadingWhitespaceCount(line)
-      let raw = sanitizeYamlScalar(String(trimmed.dropFirst(key.count + 1)))
-      if raw.hasPrefix("[") && raw.hasSuffix("]") {
-        let inner = raw.dropFirst().dropLast()
-        return inner
-          .split(separator: ",")
-          .map { sanitizeYamlScalar(String($0)) }
-          .filter { !$0.isEmpty }
-      }
-      if !raw.isEmpty {
-        return [raw]
-      }
-      var values: [String] = []
-      var j = i + 1
-      while j < section.count {
-        let nextLine = section[j]
-        let nextTrimmed = nextLine.trimmingCharacters(in: .whitespaces)
-        if nextTrimmed.isEmpty || nextTrimmed.hasPrefix("#") {
-          j += 1
-          continue
-        }
-        let nextIndent = leadingWhitespaceCount(nextLine)
-        if nextIndent <= keyIndent {
-          break
-        }
-        guard nextTrimmed.hasPrefix("-") else {
-          j += 1
-          continue
-        }
-        let item = sanitizeYamlScalar(
-          String(nextTrimmed.dropFirst().trimmingCharacters(in: .whitespaces))
-        )
-        if !item.isEmpty {
-          values.append(item)
-        }
-        j += 1
-      }
-      return values
+  private func intValue(in object: [String: Any], keys: [String]) -> Int? {
+    guard let value = value(in: object, keys: keys) else {
+      return nil
     }
-    return []
+    if let intValue = value as? Int {
+      return intValue
+    }
+    if let numberValue = value as? NSNumber {
+      return numberValue.intValue
+    }
+    if let stringValue = value as? String {
+      return Int(sanitizeYamlScalar(stringValue))
+    }
+    return nil
+  }
+
+  private func stringValue(in object: [String: Any], keys: [String]) -> String? {
+    guard let value = value(in: object, keys: keys) else {
+      return nil
+    }
+    if let stringValue = value as? String {
+      let normalized = sanitizeYamlScalar(stringValue)
+      return normalized.isEmpty ? nil : normalized
+    }
+    if let numberValue = value as? NSNumber {
+      return numberValue.stringValue
+    }
+    return nil
+  }
+
+  private func stringListValue(in object: [String: Any], keys: [String]) -> [String]? {
+    guard let value = value(in: object, keys: keys) else {
+      return nil
+    }
+    return parseStringList(value)
+  }
+
+  private func parseStringList(_ raw: Any?) -> [String] {
+    guard let raw else {
+      return []
+    }
+    if let values = raw as? [String] {
+      return values.map { sanitizeYamlScalar($0) }.filter { !$0.isEmpty }
+    }
+    if let values = raw as? [Any] {
+      return values.compactMap { value -> String? in
+        if let stringValue = value as? String {
+          let normalized = sanitizeYamlScalar(stringValue)
+          return normalized.isEmpty ? nil : normalized
+        }
+        if let numberValue = value as? NSNumber {
+          return numberValue.stringValue
+        }
+        return nil
+      }
+    }
+    guard let rawString = raw as? String else {
+      return []
+    }
+    let trimmed = rawString.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.isEmpty {
+      return []
+    }
+    if
+      let data = trimmed.data(using: .utf8),
+      let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [Any]
+    {
+      return parseStringList(jsonArray)
+    }
+    if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
+      let inner = String(trimmed.dropFirst().dropLast())
+      return inner
+        .split(separator: ",")
+        .map { sanitizeYamlScalar(String($0)) }
+        .filter { !$0.isEmpty }
+    }
+    return trimmed
+      .components(separatedBy: CharacterSet(charactersIn: ",\n"))
+      .map { sanitizeYamlScalar($0) }
+      .filter { !$0.isEmpty }
   }
 
   private func sanitizeYamlScalar(_ value: String) -> String {
@@ -481,10 +566,6 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       result = String(result.dropFirst().dropLast())
     }
     return result
-  }
-
-  private func leadingWhitespaceCount(_ line: String) -> Int {
-    line.prefix { $0 == " " || $0 == "\t" }.count
   }
 
   private func parseIPv4CIDR(_ cidr: String) -> (address: String, mask: String)? {
@@ -753,13 +834,17 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     if let value = scanTunnelFileDescriptor(), value > 0 {
       return value
     }
-    if let value = packetFlow.value(forKeyPath: "socket.fileDescriptor") as? Int,
-       isTunnelFileDescriptor(value) {
-      return value
+    if let rawValue = packetFlow.value(forKeyPath: "socket.fileDescriptor") as? Int {
+      if rawValue > 0 && isTunnelFileDescriptor(rawValue) {
+        return rawValue
+      }
+      NSLog("PacketTunnel: packetFlow socket.fileDescriptor invalid - \(rawValue)")
+    } else {
+      NSLog("PacketTunnel: packetFlow socket.fileDescriptor unavailable")
     }
     NSLog("PacketTunnel: failed to resolve tunnel file descriptor from all strategies")
     throw NSError(domain: "PacketTunnel", code: -2, userInfo: [
-      NSLocalizedDescriptionKey: "failed to resolve tunnel file descriptor"
+      NSLocalizedDescriptionKey: "failed to resolve tunnel file descriptor: utun fd unavailable"
     ])
   }
 
@@ -787,147 +872,6 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       }
     }
     return nil
-  }
-
-  private func prepareConfigFile(homeDir: String, configFileName: String, fileDescriptor: Int) throws {
-    let path = (homeDir as NSString).appendingPathComponent(configFileName)
-    let url = URL(fileURLWithPath: path)
-    let content = try String(contentsOf: url, encoding: .utf8)
-    let updatedContent = injectTunConfig(content: content, fileDescriptor: fileDescriptor)
-    if updatedContent == content {
-      return
-    }
-    try updatedContent.write(to: url, atomically: true, encoding: .utf8)
-  }
-
-  private func injectTunConfig(content: String, fileDescriptor: Int) -> String {
-    let useCrlf = content.contains("\r\n")
-    let normalized = content.replacingOccurrences(of: "\r\n", with: "\n")
-    var lines = normalized.components(separatedBy: "\n")
-
-    func isTopLevelKeyLine(_ line: String) -> Bool {
-      if line.isEmpty { return false }
-      if line.hasPrefix(" ") || line.hasPrefix("\t") { return false }
-      let trimmed = line.trimmingCharacters(in: .whitespaces)
-      if trimmed.hasPrefix("-") || trimmed.hasPrefix("#") { return false }
-      return trimmed.range(of: #"^[A-Za-z0-9_-]+:\s*"#, options: .regularExpression) != nil
-    }
-
-    func leadingWhitespace(_ line: String) -> String {
-      let prefix = line.prefix { $0 == " " || $0 == "\t" }
-      return String(prefix)
-    }
-
-    var tunIndex: Int?
-    for i in 0..<lines.count {
-      let line = lines[i]
-      let trimmed = line.trimmingCharacters(in: .whitespaces)
-      if trimmed != "tun:" { continue }
-      let raw = line.hasPrefix("\u{FEFF}") ? String(line.dropFirst()) : line
-      if raw.hasPrefix("tun:") {
-        tunIndex = i
-        break
-      }
-    }
-
-    let requiredKeyLines: [(key: String, line: (String) -> String)] = [
-      ("enable", { indent in "\(indent)enable: true" }),
-      ("stack", { indent in "\(indent)stack: system" }),
-      ("auto-detect-interface", { indent in "\(indent)auto-detect-interface: true" }),
-      ("file-descriptor", { indent in "\(indent)file-descriptor: \(fileDescriptor)" }),
-    ]
-    let defaultKeyLines: [(key: String, line: (String) -> String)] = [
-      ("auto-route", { indent in "\(indent)auto-route: false" }),
-      ("mtu", { indent in "\(indent)mtu: 1500" }),
-      ("inet4-address", { indent in "\(indent)inet4-address: [172.19.0.1/30]" }),
-      ("inet6-address", { indent in "\(indent)inet6-address: [fdfe:dcbe:9876::1/126]" }),
-      ("route-address", { indent in "\(indent)route-address: [0.0.0.0/0, ::/0]" }),
-      ("dns-hijack", { indent in "\(indent)dns-hijack: []" }),
-    ]
-
-    guard let tunIndex else {
-      let defaultBlock = [
-        "tun:",
-        "  enable: true",
-        "  stack: system",
-        "  auto-route: false",
-        "  auto-detect-interface: true",
-        "  mtu: 1500",
-        "  inet4-address: [172.19.0.1/30]",
-        "  inet6-address: [fdfe:dcbe:9876::1/126]",
-        "  route-address: [0.0.0.0/0, ::/0]",
-        "  dns-hijack: []",
-        "  file-descriptor: \(fileDescriptor)",
-      ].joined(separator: "\n")
-      let glued = normalized.hasSuffix("\n") || normalized.isEmpty ? normalized : "\(normalized)\n"
-      let result = "\(glued)\n\(defaultBlock)\n"
-      return useCrlf ? result.replacingOccurrences(of: "\n", with: "\r\n") : result
-    }
-
-    var blockEnd = lines.count
-    if tunIndex + 1 < lines.count {
-      for i in (tunIndex + 1)..<lines.count {
-        if isTopLevelKeyLine(lines[i]) {
-          blockEnd = i
-          break
-        }
-      }
-    }
-
-    var indent = "  "
-    if tunIndex + 1 < blockEnd {
-      for i in (tunIndex + 1)..<blockEnd {
-        let line = lines[i]
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        if trimmed.isEmpty || trimmed.hasPrefix("#") { continue }
-        let prefix = leadingWhitespace(line)
-        if !prefix.isEmpty {
-          indent = prefix
-          break
-        }
-      }
-    }
-
-    var presentKeys = Set<String>()
-    if tunIndex + 1 < blockEnd {
-      for i in (tunIndex + 1)..<blockEnd {
-        let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
-        for (key, lineBuilder) in requiredKeyLines {
-          if trimmed.hasPrefix("\(key):") {
-            lines[i] = lineBuilder(indent)
-            presentKeys.insert(key)
-            break
-          }
-        }
-        for (key, _) in defaultKeyLines where trimmed.hasPrefix("\(key):") {
-          presentKeys.insert(key)
-        }
-      }
-    }
-
-    var insertAt = tunIndex + 1
-    while insertAt < blockEnd {
-      let trimmed = lines[insertAt].trimmingCharacters(in: .whitespaces)
-      if trimmed.isEmpty || trimmed.hasPrefix("#") {
-        insertAt += 1
-        continue
-      }
-      break
-    }
-
-    let toInsert =
-      requiredKeyLines
-        .filter { !presentKeys.contains($0.key) }
-        .map { $0.line(indent) } +
-      defaultKeyLines
-        .filter { !presentKeys.contains($0.key) }
-        .map { $0.line(indent) }
-    if !toInsert.isEmpty {
-      lines.insert(contentsOf: toInsert, at: insertAt)
-    }
-
-    let result = lines.joined(separator: "\n")
-    return useCrlf ? result.replacingOccurrences(of: "\n", with: "\r\n") : result
   }
 
   private func handleMessageData(_ messageData: Data, appGroupId: String) -> ProviderMessageResponse {
@@ -1306,5 +1250,17 @@ private final class PacketTunnelSocketProtector: NSObject, MobileSocketProtector
 
   func protectSocket(_ fd: Int64, network: String?, address: String?) -> Bool {
     provider?.protectSocket(fd: fd, network: network, address: address) ?? true
+  }
+}
+
+private final class PacketTunnelTunOpener: NSObject, MobileTunOpenerProtocol {
+  private weak var provider: PacketTunnelProvider?
+
+  init(provider: PacketTunnelProvider) {
+    self.provider = provider
+  }
+
+  func openTun(_ options: MobileTunOptions?) -> Int64 {
+    provider?.openTun(options: options) ?? -1
   }
 }
