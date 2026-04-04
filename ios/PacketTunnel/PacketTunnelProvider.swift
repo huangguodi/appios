@@ -39,8 +39,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   private var trafficTimer: DispatchSourceTimer?
   private var lastPersistedTrafficSnapshot = TrafficSnapshot.empty
   private var lastPersistedTrafficAt: TimeInterval = 0
-  private var lastTrafficTotalUp: Int64?
-  private var lastTrafficTotalDown: Int64?
+  private var currentTunnelInterfaceName: String?
+  private var lastTunnelInterfaceRxBytes: Int64?
+  private var lastTunnelInterfaceTxBytes: Int64?
   private var lastTrafficSampleAt: TimeInterval = 0
   private var socketProtector: PacketTunnelSocketProtector?
   private var tunOpener: PacketTunnelTunOpener?
@@ -226,6 +227,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
       let settings = buildNetworkSettings(tunOptions: payload)
       try applyTunnelNetworkSettings(settings)
       let fd = try resolveTunnelFileDescriptor()
+      currentTunnelInterfaceName = tunnelInterfaceName(for: fd)
       recordTunOpenSuccess(fd: Int64(fd))
       return Int64(fd)
     } catch {
@@ -966,8 +968,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   }
 
   private func resetTrafficSampling() {
-    lastTrafficTotalUp = nil
-    lastTrafficTotalDown = nil
+    currentTunnelInterfaceName = nil
+    lastTunnelInterfaceRxBytes = nil
+    lastTunnelInterfaceTxBytes = nil
     lastTrafficSampleAt = 0
   }
 
@@ -1008,7 +1011,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
   private func currentTrafficSnapshot() -> TrafficSnapshot {
     let status = started ? "running" : "stopped"
     let mode = started ? MobileGetMode() : ""
-    let traffic = resolveTrafficRates()
+    let traffic = resolveNetworkExtensionTrafficRates() ?? resolveKernelTrafficRates()
     return TrafficSnapshot(
       status: status,
       running: started,
@@ -1018,24 +1021,58 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     )
   }
 
-  private func resolveTrafficRates() -> (up: Int64, down: Int64) {
+  private func resolveNetworkExtensionTrafficRates() -> (up: Int64, down: Int64)? {
+    guard let interfaceName = resolveCurrentTunnelInterfaceName(),
+          let counters = interfaceTrafficCounters(named: interfaceName) else {
+      return nil
+    }
+    let now = Date().timeIntervalSince1970
+    guard
+      let previousRxBytes = lastTunnelInterfaceRxBytes,
+      let previousTxBytes = lastTunnelInterfaceTxBytes,
+      lastTrafficSampleAt > 0
+    else {
+      lastTunnelInterfaceRxBytes = counters.rxBytes
+      lastTunnelInterfaceTxBytes = counters.txBytes
+      lastTrafficSampleAt = now
+      return nil
+    }
+    lastTunnelInterfaceRxBytes = counters.rxBytes
+    lastTunnelInterfaceTxBytes = counters.txBytes
+    let elapsed = now - lastTrafficSampleAt
+    lastTrafficSampleAt = now
+    guard elapsed > 0.2 else {
+      return (lastPersistedTrafficSnapshot.up, lastPersistedTrafficSnapshot.down)
+    }
+    guard counters.rxBytes >= previousRxBytes, counters.txBytes >= previousTxBytes else {
+      return nil
+    }
+    let uploadBytesPerSecond = Int64(Double(counters.txBytes - previousTxBytes) / elapsed)
+    let downloadBytesPerSecond = Int64(Double(counters.rxBytes - previousRxBytes) / elapsed)
+    return (
+      up: max(uploadBytesPerSecond, 0),
+      down: max(downloadBytesPerSecond, 0)
+    )
+  }
+
+  private func resolveKernelTrafficRates() -> (up: Int64, down: Int64) {
     let instantaneousUp = max(Int64(MobileTrafficUp()), 0)
     let instantaneousDown = max(Int64(MobileTrafficDown()), 0)
     let totalUp = max(Int64(MobileTrafficTotalUp()), 0)
     let totalDown = max(Int64(MobileTrafficTotalDown()), 0)
     let now = Date().timeIntervalSince1970
     guard
-      let previousTotalUp = lastTrafficTotalUp,
-      let previousTotalDown = lastTrafficTotalDown,
+      let previousTotalUp = lastTunnelInterfaceTxBytes,
+      let previousTotalDown = lastTunnelInterfaceRxBytes,
       lastTrafficSampleAt > 0
     else {
-      lastTrafficTotalUp = totalUp
-      lastTrafficTotalDown = totalDown
+      lastTunnelInterfaceTxBytes = totalUp
+      lastTunnelInterfaceRxBytes = totalDown
       lastTrafficSampleAt = now
       return (instantaneousUp, instantaneousDown)
     }
-    lastTrafficTotalUp = totalUp
-    lastTrafficTotalDown = totalDown
+    lastTunnelInterfaceTxBytes = totalUp
+    lastTunnelInterfaceRxBytes = totalDown
     let elapsed = now - lastTrafficSampleAt
     lastTrafficSampleAt = now
     guard elapsed > 0.2 else {
@@ -1049,6 +1086,95 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     let resolvedUp = derivedUp > 0 ? derivedUp : instantaneousUp
     let resolvedDown = derivedDown > 0 ? derivedDown : instantaneousDown
     return (resolvedUp, resolvedDown)
+  }
+
+  private func resolveCurrentTunnelInterfaceName() -> String? {
+    if let currentTunnelInterfaceName, !currentTunnelInterfaceName.isEmpty {
+      return currentTunnelInterfaceName
+    }
+    let fd = Int(lastTunOpenFD)
+    if fd > 0, let resolved = tunnelInterfaceName(for: fd) {
+      currentTunnelInterfaceName = resolved
+      return resolved
+    }
+    if let resolved = activeTunnelInterfaceNames().first {
+      currentTunnelInterfaceName = resolved
+      return resolved
+    }
+    return nil
+  }
+
+  private func activeTunnelInterfaceNames() -> [String] {
+    var pointer: UnsafeMutablePointer<ifaddrs>?
+    guard getifaddrs(&pointer) == 0, let first = pointer else {
+      return []
+    }
+    defer { freeifaddrs(pointer) }
+
+    var result: [String] = []
+    var seen = Set<String>()
+    var current: UnsafeMutablePointer<ifaddrs>? = first
+
+    while let interface = current {
+      let flags = Int32(interface.pointee.ifa_flags)
+      let isUp = (flags & IFF_UP) != 0
+      let isRunning = (flags & IFF_RUNNING) != 0
+      if isUp, isRunning, let cName = interface.pointee.ifa_name {
+        let name = String(cString: cName)
+        if name.hasPrefix("utun"), !seen.contains(name) {
+          seen.insert(name)
+          result.append(name)
+        }
+      }
+      current = interface.pointee.ifa_next
+    }
+
+    return result.sorted()
+  }
+
+  private func interfaceTrafficCounters(named interfaceName: String) -> (rxBytes: Int64, txBytes: Int64)? {
+    var pointer: UnsafeMutablePointer<ifaddrs>?
+    guard getifaddrs(&pointer) == 0, let first = pointer else {
+      return nil
+    }
+    defer { freeifaddrs(pointer) }
+
+    var current: UnsafeMutablePointer<ifaddrs>? = first
+    while let interface = current {
+      defer { current = interface.pointee.ifa_next }
+      guard let cName = interface.pointee.ifa_name else {
+        continue
+      }
+      let name = String(cString: cName)
+      guard name == interfaceName,
+            let addr = interface.pointee.ifa_addr,
+            addr.pointee.sa_family == UInt8(AF_LINK),
+            let rawData = interface.pointee.ifa_data else {
+        continue
+      }
+      let data = rawData.assumingMemoryBound(to: if_data.self).pointee
+      return (
+        rxBytes: Int64(data.ifi_ibytes),
+        txBytes: Int64(data.ifi_obytes)
+      )
+    }
+    return nil
+  }
+
+  private func tunnelInterfaceName(for fd: Int) -> String? {
+    guard fd > 0 else {
+      return nil
+    }
+    var buf = [CChar](repeating: 0, count: Int(IFNAMSIZ))
+    var len = socklen_t(buf.count)
+    let result: Int32 = buf.withUnsafeMutableBytes { ptr in
+      getsockopt(Int32(fd), 2, 2, ptr.baseAddress, &len)
+    }
+    guard result == 0 else {
+      return nil
+    }
+    let name = String(cString: buf)
+    return name.hasPrefix("utun") ? name : nil
   }
 
   private func refreshSharedState(appGroupId: String, sessionId: String, includeProxies: Bool) {
