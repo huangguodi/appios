@@ -185,10 +185,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp>
     with WidgetsBindingObserver, WindowListener {
   Size get _designSize {
-    if (!kIsWeb && Platform.isWindows) {
-      return const Size(300, 520);
-    }
-    return const Size(360, 800);
+    return const Size(300, 600);
   }
 
   @override

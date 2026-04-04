@@ -22,7 +22,7 @@ class TrafficPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
       decoration: BoxDecoration(
         color: AppColors.cardBackground.withValues(alpha: 0.42),
         borderRadius: BorderRadius.circular(20.r),

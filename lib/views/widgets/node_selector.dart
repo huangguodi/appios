@@ -35,7 +35,7 @@ class NodeSelector extends StatelessWidget {
             onTap: () => _showNodeSelectorSheet(context, viewModel),
             borderRadius: BorderRadius.circular(16.r),
             child: Container(
-              height: 42.h,
+              height: 40.h,
               padding: EdgeInsets.symmetric(horizontal: 16.w),
               decoration: BoxDecoration(
                 color: AppColors.cardBackground.withValues(alpha: 0.38),
@@ -112,13 +112,13 @@ class NodeSelector extends StatelessWidget {
     final countryCode = _countryCodeFor(country);
     return SizedBox(
       width: 24.w,
-      height: 12.h,
+      height: 18.h,
       child: Center(
         child: FittedBox(
           fit: BoxFit.contain,
           child: SizedBox(
             width: 24.w,
-            height: 12.h,
+            height: 18.h,
             child: CountryFlag.fromCountryCode(
               countryCode,
               shape: RoundedRectangle(6.r),
